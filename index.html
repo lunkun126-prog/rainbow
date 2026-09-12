@@ -335,38 +335,73 @@ moonSprite.scale.setScalar(75);
 scene.add(moonSprite);
 
 /* ================= 远山 ================= */
+function makeMountainTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 512); grad.addColorStop(0, '#777b72'); grad.addColorStop(.48, '#667463'); grad.addColorStop(1, '#4d714c');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 1800; i++) {
+    const v = 55 + Math.random() * 80, a = .08 + Math.random() * .18;
+    ctx.fillStyle = `rgba(${v},${v + 8},${v - 3},${a})`;
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 2 + Math.random() * 12, 1 + Math.random() * 5);
+  }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(2, 2); return tex;
+}
+const mountainTexture = makeMountainTexture();
+const mountains = [];
 function addMountain(x, z, r, h, color) {
-  const m = new THREE.Mesh(
-    new THREE.ConeGeometry(r, h, 7),
-    new THREE.MeshLambertMaterial({ color })
-  );
+  const geo = new THREE.ConeGeometry(r, h, 20, 8);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i), a = Math.atan2(pz, px);
+    const rough = 1 + Math.sin(a * 5 + py * .11) * .045 + Math.sin(a * 11 - py * .07) * .025;
+    pos.setXYZ(i, px * rough, py, pz * rough);
+  }
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, map: mountainTexture }));
   m.position.set(x, h/2 - 2, z);
   m.rotation.y = Math.random() * 3;
-  scene.add(m);
+  scene.add(m); mountains.push(m);
+  // 远山也有真实的岩石与植被，不再是一块光滑的圆锥。
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x73766f });
+  const grassMat = new THREE.MeshLambertMaterial({ color: 0x557e4f });
+  for (let i = 0; i < 3; i++) {
+    const a = Math.random() * Math.PI * 2, d = r * (0.66 + Math.random() * 0.18);
+    const yy = Math.max(.8, h * (1 - d / r) - 2);
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(.9 + Math.random() * 1.4, 0), rockMat);
+    rock.position.set(x + Math.cos(a) * d, yy, z + Math.sin(a) * d); rock.rotation.set(Math.random(), Math.random(), Math.random()); scene.add(rock);
+    if (i % 2 === 0) {
+      const tuft = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.2, 5), grassMat);
+      tuft.position.set(x + Math.cos(a + .12) * d, yy + .9, z + Math.sin(a + .12) * d); scene.add(tuft);
+    }
+    if (i % 3 === 0) {
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(.35, 7, 6), new THREE.MeshLambertMaterial({ color: i % 2 ? 0xf0bd43 : 0xd76b83 }));
+      flower.position.set(x + Math.cos(a - .14) * d, yy + .7, z + Math.sin(a - .14) * d); scene.add(flower);
+    }
+  }
 }
-addMountain(-190, -320, 95, 85, 0x7ba8b5);
-addMountain(-40,  -370, 130, 110, 0x6f9fae);
-addMountain(150, -330, 105, 92, 0x84ae9e);
-addMountain(280, -390, 150, 120, 0x6f9fae);
+addMountain(-210, -385, 70, 92, 0x7c8f7b);
+addMountain(-60,  -420, 96, 118, 0x718373);
+addMountain(125, -395, 78, 105, 0x7f947d);
+addMountain(285, -435, 105, 136, 0x718575);
 
 /* ================= 大地 & 积雪层 & 小河 ================= */
-function makeGrassTexture() {
+function makeConcreteTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 512;
   const g = c.getContext('2d');
-  const grd = g.createRadialGradient(256,256,40, 256,256,360);
-  grd.addColorStop(0, '#8ed061'); grd.addColorStop(0.6, '#6fb84c'); grd.addColorStop(1, '#4f9440');
-  g.fillStyle = grd; g.fillRect(0,0,512,512);
-  for (let i = 0; i < 2600; i++) {
-    const x = Math.random()*512, y = Math.random()*512, r = Math.random()*2.2+0.5;
-    g.fillStyle = Math.random() < 0.5 ? 'rgba(60,130,50,0.25)' : 'rgba(190,235,140,0.22)';
-    g.beginPath(); g.arc(x,y,r,0,7); g.fill();
+  g.fillStyle = '#d3d6d5'; g.fillRect(0,0,512,512);
+  g.strokeStyle = 'rgba(110,118,118,.24)'; g.lineWidth = 1;
+  for (let y = 0; y < 512; y += 64) {
+    g.beginPath(); g.moveTo(0,y); g.lineTo(512,y); g.stroke();
+  }
+  for (let x = 0; x < 512; x += 96) {
+    g.beginPath(); g.moveTo(x,0); g.lineTo(x,512); g.stroke();
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6,6); return t;
 }
 const ground = new THREE.Mesh(
   new THREE.CircleGeometry(520, 64),
-  new THREE.MeshLambertMaterial({ map: makeGrassTexture() })
+  new THREE.MeshLambertMaterial({ color: 0x86aa68 })
 );
 ground.rotation.x = -Math.PI/2;
 scene.add(ground);
@@ -396,7 +431,7 @@ function makeRiverFlowTexture() {   // 水面波纹贴图,UV沿河道滚动就�
 }
 const riverFlowTex = makeRiverFlowTexture();
 const riverMat = new THREE.MeshLambertMaterial({
-  color: 0x6db9e8, map: riverFlowTex, transparent: true, opacity: 0.88
+  color: 0x8ed8ec, map: riverFlowTex, transparent: true, opacity: 0.76
 });
 const riverPts = [];   // 河的采样点:种草种花要避开河道
 const riverCurve = new THREE.CatmullRomCurve3([
@@ -412,6 +447,84 @@ river.scale.y = 0.07;
 river.position.y = 0.28;
 scene.add(river);
 riverPts.push(...riverCurve.getSpacedPoints(80).map(p => [p.x, p.z]));   // 等弧长采样:下标比例 ≈ getPointAt 的 u,岸边定位才不偏
+function keepDry(g, clearance = 9) {
+  let near = null, best = Infinity;
+  riverPts.forEach(([x, z]) => { const d = (g.position.x - x) ** 2 + (g.position.z - z) ** 2; if (d < best) { best = d; near = [x, z]; } });
+  if (best < clearance * clearance) {
+    const dx = g.position.x - near[0], dz = g.position.z - near[1], len = Math.hypot(dx, dz) || 1;
+    g.position.x = near[0] + dx / len * clearance; g.position.z = near[1] + dz / len * clearance;
+  }
+}
+/* 净空充足的城市拱桥：行人从桥面过河，船从拱洞下方通过。 */
+const BRIDGE_X = -18, BRIDGE_Z = -6, BRIDGE_HALF = 18;
+function bridgeY(z) {
+  const d = Math.min(1, Math.abs(z - BRIDGE_Z) / BRIDGE_HALF);
+  return 1.05 + 6.1 * Math.pow(1 - d, 1.35);
+}
+const bridge = new THREE.Group();
+{
+  const stone = new THREE.MeshLambertMaterial({ color: 0xd9c8ad });
+  const railMat = new THREE.MeshLambertMaterial({ color: 0x4f5e62 });
+  const segments = 24, step = BRIDGE_HALF * 2 / segments;
+  for (let i = 0; i < segments; i++) {
+    const z1 = BRIDGE_Z - BRIDGE_HALF + i * step, z2 = z1 + step;
+    const y1 = bridgeY(z1), y2 = bridgeY(z2), zm = (z1 + z2) / 2, ym = (y1 + y2) / 2;
+    const pitch = -Math.atan2(y2 - y1, z2 - z1);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(8.5, .55, step + .12), stone);
+    deck.position.set(BRIDGE_X, ym, zm); deck.rotation.x = pitch; bridge.add(deck);
+    [-1, 1].forEach(side => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, step + .16), railMat);
+      rail.position.set(BRIDGE_X + side * 4.05, ym + 1.25, zm); rail.rotation.x = pitch; bridge.add(rail);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(.18, 1.35, .18), railMat);
+      post.position.set(BRIDGE_X + side * 4.05, ym + .62, zm); bridge.add(post);
+    });
+  }
+  [-1, 1].forEach(side => {
+    const archPts = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = -1 + i / 12;
+      archPts.push(new THREE.Vector3(BRIDGE_X + side * 3.65, .45 + 4.8 * (1 - t * t), BRIDGE_Z + t * 14.5));
+    }
+    bridge.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPts), 48, .32, 7), stone));
+  });
+  [-1, 1].forEach(side => {
+    const abutment = new THREE.Mesh(new THREE.BoxGeometry(10, 1.2, 3), stone);
+    abutment.position.set(BRIDGE_X, .6, BRIDGE_Z + side * 18); bridge.add(abutment);
+  });
+  scene.add(bridge);
+}
+function riverSideOf(x, z) {
+  const u = nearestRiverU(x, z), p = riverCurve.getPointAt(u), tangent = riverCurve.getTangentAt(u);
+  let nx = -tangent.z, nz = tangent.x;
+  if (nz < 0) { nx = -nx; nz = -nz; }
+  return (x - p.x) * nx + (z - p.z) * nz;
+}
+function makeSafeRoute(from, to, lane = 0) {
+  const route = [], south = BRIDGE_Z + BRIDGE_HALF, north = BRIDGE_Z - BRIDGE_HALF;
+  const fromSide = riverSideOf(from.x, from.z), toSide = riverSideOf(to.x, to.z);
+  const fromSouth = fromSide > 0, fromNorth = fromSide < 0;
+  const toSouth = toSide > 0, toNorth = toSide < 0;
+  if ((fromSouth && toNorth) || (fromNorth && toSouth)) {
+    const startZ = fromSouth ? south : north, endZ = fromSouth ? north : south;
+    route.push([BRIDGE_X + lane, 0, startZ]);
+    for (let i = 0; i <= 12; i++) {
+      const z = startZ + (endZ - startZ) * i / 12;
+      route.push([BRIDGE_X + lane, bridgeY(z) + .34, z]);
+    }
+  }
+  route.push([to.x, to.y || 0, to.z]);
+  return route;
+}
+const koiFish = [];
+for (let i = 0; i < 14; i++) {
+  const fish = new THREE.Group(), red = new THREE.MeshLambertMaterial({ color: i % 3 ? 0xe84b35 : 0xf2f0e5 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.5, 8, 6), red); body.scale.set(1.8, .55, .8); fish.add(body);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(.36, .8, 4), red); tail.rotation.z = Math.PI / 2; tail.position.x = -1; fish.add(tail);
+  const patch = new THREE.Mesh(new THREE.SphereGeometry(.24, 7, 5), new THREE.MeshLambertMaterial({ color: i % 3 ? 0xf5eee2 : 0xe84b35 })); patch.scale.set(1.3, .45, .9); patch.position.set(.2, .22, 0); fish.add(patch);
+  [-1, 1].forEach(side => { const eye = new THREE.Mesh(new THREE.SphereGeometry(.055, 6, 5), new THREE.MeshLambertMaterial({ color: 0x15191b })); eye.position.set(.82, .08, side * .3); fish.add(eye); });
+  fish.scale.setScalar(.8 + Math.random() * .35); scene.add(fish);
+  koiFish.push({ fish, tail, u: Math.random(), side: (Math.random() - .5) * 3.2, speed: .01 + Math.random() * .015, phase: Math.random() * 7 });
+}
 
 /* ---- 河里的小船,顺流漂 ---- */
 function makeBoat(hullColor, sailColor) {
@@ -441,6 +554,29 @@ const boats = BOAT_SETUPS.map((c, i) => ({
   caught: false, caughtT: 0
 }));
 
+// 潜水艇属于河道交通，不再摆进陆地展馆。艇身略低于水面，指挥塔露出水面便于看见。
+function makeRiverSubmarine() {
+  const g = new THREE.Group();
+  const yellow = new THREE.MeshLambertMaterial({ color: 0xd6a13f });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x6c552d });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x8fc9e5, transparent: true, opacity: .85 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 10), yellow);
+  body.scale.set(1, .7, 3.1); g.add(body);
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.15, 1.7), yellow);
+  tower.position.y = 1.35; g.add(tower);
+  const scopeA = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 1.35, 8), dark);
+  scopeA.position.set(0, 2.45, 0); g.add(scopeA);
+  const scopeB = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, .7, 8), dark);
+  scopeB.rotation.z = Math.PI / 2; scopeB.position.set(.28, 3.08, 0); g.add(scopeB);
+  [-1.8, 0, 1.8].forEach(z => {
+    const port = new THREE.Mesh(new THREE.CylinderGeometry(.3, .3, .1, 12), glass);
+    port.rotation.z = Math.PI / 2; port.position.set(1.5, .15, z); g.add(port);
+  });
+  scene.add(g);
+  return g;
+}
+const riverSubmarine = { g: makeRiverSubmarine(), u: .62, speed: .0045 };
+
 /* ================= 草丛（堆满整个草地） ================= */
 // 不长草的地方:房子、大树、健身器材、泥坑、雪人
 const noGrassZones = [
@@ -448,7 +584,7 @@ const noGrassZones = [
   [-18, -102, 14], [58, -96, 13], [-142, -126, 15],   // 新房子
   [-68, -100, 14], [138, -72, 14], [-112, -140, 15], [35, -128, 14],   // 新楼盘
   [-60, -160, 15], [20, -168, 14], [95, -158, 15], [-158, -168, 15],   // 后排新房子
-  [56, 2, 12],                                         // 大树
+  [188, 58, 18],                                       // 大树
   [-30, 40, 7], [-24, 44, 5],                          // 健身器材
   [-9, 34, 7], [24, 38, 7],                            // 泥坑
   [16, 8, 7], [3, 30, 5]                               // 雪人、田宝
@@ -475,7 +611,7 @@ function randGrassPos(rMax) {
 {
   const grassGeo = new THREE.ConeGeometry(0.55, 2.4, 4);
   const grassMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const GRASS_N = 2600;
+  const GRASS_N = 1;
   const grass = new THREE.InstancedMesh(grassGeo, grassMat, GRASS_N);
   const dummy = new THREE.Object3D();
   const cA = new THREE.Color(0x59a34a), cB = new THREE.Color(0x93d56b);
@@ -492,12 +628,13 @@ function randGrassPos(rMax) {
     grass.setMatrixAt(i, dummy.matrix);
     grass.setColorAt(i, cA.clone().lerp(cB, Math.random()));
   }
+  grass.count = 0; // 公园改造后不再把草散铺在水泥地上
   scene.add(grass);
 }
 
 /* ================= 野花（草丛里点缀的小花） ================= */
 {
-  const FLOWER_N = 240;
+  const FLOWER_N = 1;
   const dummy = new THREE.Object3D();
   const stems = new THREE.InstancedMesh(
     new THREE.CylinderGeometry(0.05, 0.07, 1.4, 5),
@@ -525,6 +662,7 @@ function randGrassPos(rMax) {
       stems.setMatrixAt(i, dummy.matrix); heads.setMatrixAt(i, dummy.matrix);
     }
   }
+  stems.count = heads.count = 0; // 花只保留在下面的泥土花坛内
   scene.add(stems); scene.add(heads);
 }
 
@@ -539,7 +677,10 @@ function registerFoliage(mesh, leaflessTree) {
     grow: 0.7 + Math.random()*0.9,
     leaflessTree,
     targetScale: 1,
-    targetColor: new THREE.Color(0x4a9c48)
+    targetColor: new THREE.Color(0x4a9c48),
+    baseRotZ: mesh.rotation.z,
+    sway: 0.025 + Math.random() * 0.04,
+    phase: Math.random() * Math.PI * 2
   });
 }
 
@@ -667,19 +808,14 @@ function addTree(x, z, s, leafless = false, withNest = false) {
   treeGroups.push({ g, canopyY: 9.15 * s });
   return g;
 }
-addTree(-70, -30, 1.5, false, true);
-addTree(88, -55, 1.2, true);
-addTree(-40, -85, 1.0);
-addTree(-110, -70, 1.3, true);
-addTree(120, -95, 1.6, false, true);
-addTree(-150, -50, 1.4);
-addTree(-90, -125, 1.1);
-addTree(20, -115, 0.9);
-addTree(160, -60, 1.3);
-addTree(-170, -115, 1.5, true);
-addTree(95, -145, 1.2);
-addTree(-55, -122, 1.0);
-addTree(150, -112, 1.4);
+addTree(-210, 54, 1.2, false, true);
+addTree(-154, -52, 1.1, true);
+addTree(-110, -45, 1.0);   // 原坐标(-82,-58)落在娃娃屋内部，移到河后空地
+addTree(2, -62, 0.95);
+addTree(78, -58, 1.05, true);
+addTree(160, -52, 1.15, false, true);
+addTree(222, 48, 1.15);
+addTree(142, 72, 1.0);
 
 /* ---- 参天古树（鸟窝 + 大蜂窝） ---- */
 const bigTree = new THREE.Group();
@@ -725,10 +861,10 @@ const hiveLocal = new THREE.Vector3(-6.2, 11.8, -2.2);
   drip.scale.y = 2.2; drip.position.y = -2.35; hive.add(drip);
   hive.position.copy(hiveLocal);
   bigTree.add(hive);
-  bigTree.position.set(56, 0, 2);
-  bigTree.scale.setScalar(2.4);
+  bigTree.position.set(188, 0, 58);
+  bigTree.scale.setScalar(1.7);
   scene.add(bigTree);
-  TREE_POS.push([56, 2]);
+  TREE_POS.push([188, 58]);
 }
 bigTree.updateMatrixWorld(true);
 const hiveAnchor = bigTree.localToWorld(hiveLocal.clone());
@@ -752,8 +888,10 @@ for (let i = 0; i < 7; i++) {
     new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
   wing.position.set(0, 0.22, 0); wing.rotation.x = -0.5; g.add(wing);
   scene.add(g);
-  bees.push({ g, wing, r: 3 + Math.random()*4, h: (Math.random()-0.5)*3,
-              sp: 1.5 + Math.random()*1.5, ph: Math.random()*7 });
+  const beeBeds = [[-24, 30], [12, 42], [31, 24], [-38, 26]];
+  const [bx, bz] = beeBeds[i % beeBeds.length];
+  bees.push({ g, wing, r: 2 + Math.random()*2.8, h: 1.4 + Math.random()*1.2,
+              home: new THREE.Vector3(bx, 0, bz), sp: 1.5 + Math.random()*1.5, ph: Math.random()*7 });
 }
 
 /* ================= 花（三个品种；花瓣都是五瓣） ================= */
@@ -763,7 +901,13 @@ function flowerBase(g, x, z, base) {
   g.rotation.y = Math.random()*7;
   g.scale.setScalar(base);
   scene.add(g);
-  flowers.push({ g, base, target: 1 });
+  const materials = [];
+  g.traverse(o => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (!materials.some(item => item.m === o.material)) materials.push({ m: o.material, color: o.material.color.clone() });
+  });
+  // 有些花是花苞，不会整片花坛同时盛开。
+  flowers.push({ g, base, target: Math.random() < .34 ? .48 : 1, bloom: 0, winter: false, materials });
 }
 function makeStem(h) {
   const stem = new THREE.Mesh(
@@ -845,14 +989,34 @@ function addFlowerC(x, z) {
   g.add(head);
   flowerBase(g, x, z, 0.85 + Math.random()*0.5);
 }
-for (let i = 0; i < 155; i++) {
-  const a = Math.random()*Math.PI*2, r = 12 + Math.random()*95;
-  const x = Math.cos(a)*r, z = Math.sin(a)*r * 0.72 + 14;
-  if (z <= -14) continue;
-  const pick = Math.random();
-  if (pick < 0.55) addFlowerA(x, z);
-  else if (pick < 0.85) addFlowerB(x, z);
-  else addFlowerC(x, z);
+const flowerBeds = [];
+function addFlowerBed(x, z, rx, rz) {
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(rx + .7, rx + .7, .24, 24), new THREE.MeshLambertMaterial({ color: 0xc9b8a1 }));
+  rim.scale.z = rz / rx; rim.position.set(x, .12, z); scene.add(rim);
+  const soil = new THREE.Mesh(new THREE.CylinderGeometry(rx, rx, .28, 24), new THREE.MeshLambertMaterial({ color: 0x76513a }));
+  soil.scale.z = rz / rx; soil.position.set(x, .25, z); scene.add(soil);
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .78;
+    const fx = x + Math.cos(a) * rx * r, fz = z + Math.sin(a) * rz * r;
+    const pick = Math.random();
+    if (pick < .55) addFlowerA(fx, fz);
+    else if (pick < .85) addFlowerB(fx, fz);
+    else addFlowerC(fx, fz);
+  }
+  flowerBeds.push({ x, z, rx: rx + .8, rz: rz + .8 });
+}
+addFlowerBed(-42, 18, 8, 3.8);
+addFlowerBed(35, 30, 7, 3.5);
+addFlowerBed(4, 47, 6, 3.2);
+function keepOutFlowerBeds(g) {
+  flowerBeds.forEach(b => {
+    const dx = (g.position.x - b.x) / b.rx, dz = (g.position.z - b.z) / b.rz;
+    const d = Math.hypot(dx, dz);
+    if (d < 1) {
+      const nx = dx / (d || 1), nz = dz / (d || 1);
+      g.position.x = b.x + nx * b.rx; g.position.z = b.z + nz * b.rz;
+    }
+  });
 }
 
 /* ================= 春天的小嫩芽 ================= */
@@ -936,7 +1100,7 @@ function makePerson({ h = 1, shirt = 0x4a90d9, pants = 0x33455a, hair = 0x2a2a2a
   hairBack.position.set(0, 3.35, -0.32); g.add(hairBack);
   makeFace(g, 4.0, 0.55, skin);
   g.scale.setScalar(h);
-  return { g, armL, armR, legL, legR };
+  return { g, body, armL, armR, legL, legR };
 }
 const grandpa = makePerson({ h: 1.35, shirt: 0xe8e8e8, pants: 0x6a7a8a, hair: 0xdddddd });
 grandpa.g.position.set(-36, 0, 44);
@@ -1047,6 +1211,13 @@ playKids.push(
   { p: boy3,  phase: 0.4 },
   { p: girl4, phase: 2.2 }
 );
+// 玩耍小朋友固定在远离河道的安全草坪，不再围着河岸原地转圈。
+const safeKidPlaySpots = [[-92,62],[-72,70],[-52,58],[-34,72],[104,52],[122,66],[-178,62],[158,58]];
+playKids.forEach((pk, i) => {
+  const [x, z] = safeKidPlaySpots[i];
+  pk.playX = x; pk.playZ = z;
+  pk.p.g.position.set(x, 0, z);
+});
 granny4.g.position.set(-50, 0, -148); grandpa4.g.position.set(-146, 0, -150);
 idleAdults.push(
   { p: granny4,  phase: 1.6 },
@@ -1068,8 +1239,16 @@ const goHomers = [
 const kidHome = goHomers[1];
 walkers[0].h = goHomers[2]; walkers[1].h = goHomers[3];
 function sendEveryoneHome() {
-  goHomers.forEach(h => {
+  goHomers.forEach((h, hi) => {
     if (h.mode === 'out') h.out = h.p.g.position.clone();
+    if (h.out) {
+      const lane = (hi % 3 - 1) * .9;
+      const home = new THREE.Vector3(h.home[0], 0, h.home[1]);
+      h.rainRoute = makeSafeRoute(h.out, home, lane);
+      h.leaveRoute = makeSafeRoute(home, h.out, lane);
+      h.rainRouteStep = 0; h.leaveRouteStep = 0; h.evacT = 0;
+      h.evacStarted = performance.now();
+    }
     if (h.mode !== 'home' && h.mode !== 'inside') h.mode = 'going';   // 出门/半路折返的都重新喊回家
   });
 }
@@ -1090,7 +1269,7 @@ function everyoneBackOut() {
     else if (h.mode === 'going') h.mode = 'leaving';   // 还在半路:直接折返回原位
   });
 }
-// 村民去睡觉:在家起身,走到床/板凳边;还在回家路上的由到达处理器分流(大人小孩都走这条)
+// 村民去睡觉:在家起身,走到床/沙发边;还在回家路上的由到达处理器分流(大人小孩都走这条)
 function kidGoSleep(h) {
   if (!h.sleepSpot || h.sleeping || h.mode !== 'home') return;
   h.sleeping = true;
@@ -1301,22 +1480,23 @@ function makeCow() {
   return { g, head, tail, legs };
 }
 // 三只小羊(西边草地) + 两头大花牛(东边草地,一边吃草一边慢慢走动)
-[[-45, 20, 0.6], [-52, 26, 2.2], [-38, 27, -0.8]].forEach(p => {
+[[-147, 66, 0.6], [-140, 72, 2.2], [-132, 67, -0.8]].forEach(p => {
   const s = makeSheep();
   s.g.position.set(p[0], 0, p[1]); s.g.rotation.y = p[2];
   s.g.scale.setScalar(1.35);   // 小羊长大了
   scene.add(s.g);
   grazers.push({ g: s.g, head: s.head, headY: 1.3, dip: 0.35, tail: s.tail, tailSwing: 0.5,
-    eatSpeed: 1.2 + Math.random() * 0.5, eatDepth: 0.85, phase: Math.random() * 7 });
+    eatSpeed: 1.2 + Math.random() * 0.5, eatDepth: 0.85, phase: Math.random() * 7,
+    tx: p[0], tz: p[1], pen: [-140, 70, 14, 10], walkSpeed: 0.55 + Math.random() * 0.15 });
 });
-[[20, 28, 2.6], [30, 22, -2.2]].forEach(p => {
+[[128, 66, 2.6], [142, 74, -2.2]].forEach(p => {
   const c = makeCow();
   c.g.position.set(p[0], 0, p[1]); c.g.rotation.y = p[2];
   c.g.scale.setScalar(1.5);   // 小牛长大了
   scene.add(c.g);
   grazers.push({ g: c.g, head: c.head, headY: 1.85, dip: 0.55, tail: c.tail, tailSwing: 0.4,
     eatSpeed: 0.7 + Math.random() * 0.3, eatDepth: 0.55, phase: Math.random() * 7,
-    legs: c.legs, tx: p[0], tz: p[1], walkSpeed: 0.5 + Math.random() * 0.2 });
+    legs: c.legs, tx: p[0], tz: p[1], pen: [135, 70, 15, 10], walkSpeed: 0.5 + Math.random() * 0.2 });
 });
 // 玩球的小橘猫:追着小球扑来扑去,追到了就一巴掌拍走
 function makeCat() {
@@ -1413,6 +1593,51 @@ dog.g.position.set(10, 0, 37);
 scene.add(dog.g);
 const dogPlay = { ...dog, tx: 10, tz: 37, speed: 4.2, pause: 0 };
 
+/* ================= 小动物避雨笼 ================= */
+const petShelter = { x: 12, z: 62, w: 22, d: 12, g: new THREE.Group() };
+{
+  const g = petShelter.g;
+  const wood = new THREE.MeshLambertMaterial({ color: 0x9a704c });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(petShelter.w, .18, petShelter.d),
+    new THREE.MeshLambertMaterial({ color: 0x86b86c }));
+  floor.position.y = .09; g.add(floor);
+  [-1, 1].forEach(sx => [-1, 1].forEach(sz => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(.25, 4.4, .25), wood);
+    post.position.set(sx * petShelter.w / 2, 2.2, sz * petShelter.d / 2); g.add(post);
+  }));
+  [-1, 1].forEach(sz => {
+    [1.0, 2.0, 3.0].forEach(y => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(petShelter.w, .12, .12), wood);
+      rail.position.set(0, y, sz * petShelter.d / 2); g.add(rail);
+    });
+  });
+  [-1, 1].forEach(sx => {
+    [1.0, 2.0, 3.0].forEach(y => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(.12, .12, petShelter.d), wood);
+      rail.position.set(sx * petShelter.w / 2, y, 0); g.add(rail);
+    });
+  });
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(13.5, 4.2, 4),
+    new THREE.MeshLambertMaterial({ color: 0xb75f4b }));
+  roof.position.y = 6.2; roof.rotation.y = Math.PI / 4; roof.scale.z = .58; g.add(roof);
+  g.position.set(petShelter.x, 0, petShelter.z); scene.add(g);
+}
+function petsShouldShelter() {
+  return state.raining || state.nightTarget || sciState.mode === 'tornado' || sciState.mode === 'quake';
+}
+function petSlot(index) {
+  const col = index % 4, row = Math.floor(index / 4);
+  return [petShelter.x - 7.5 + col * 5, petShelter.z - 3.5 + row * 3.5];
+}
+function movePetToSlot(g, index, speed, dt) {
+  const [tx, tz] = petSlot(index), dx = tx - g.position.x, dz = tz - g.position.z;
+  const dist = Math.hypot(dx, dz), step = speed * dt;
+  if (dist <= step) { g.position.set(tx, 0, tz); return true; }
+  g.position.x += dx / dist * step; g.position.z += dz / dist * step;
+  g.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+  return false;
+}
+
 /* ================= 房子 ================= */
 const houseWinMats = [];
 // 房间里的小床:木床头、白床垫、花被子、小枕头;wide=true 就是双人床(两个枕头)
@@ -1466,19 +1691,9 @@ function makeDesk() {
   pencil.position.set(0.78, 1.75, 0.22); desk.add(pencil);
   return desk;
 }
-// 小板凳(同屋两个小朋友时,没轮到床的那个坐在板凳上睡;没靠背,困得直点头)
-function makeBench() {
-  const g = new THREE.Group();
-  const wood = new THREE.MeshLambertMaterial({ color: 0xb87a4a });
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.5), wood);
-  seat.position.y = 0.85; g.add(seat);
-  [-0.48, 0.48].forEach(lx => [-0.16, 0.16].forEach(lz => {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), wood);
-    leg.position.set(lx, 0.43, lz); g.add(leg);
-  }));
-  return g;
-}
+const residentialHouses = [], homeActivityKids = [], homeCooks = [];
 function addHouse(x, z, s, ry, wallColor, roofColor, floors = 1, doubleBed = false) {
+  const homeIndex = residentialHouses.length;
   // 正面敞开（和娃娃屋一样），能看到屋里，点它可以进屋看
   // floors > 1 就是小楼房:中间有楼板,每层后墙都有窗;doubleBed = 一楼睡两个小朋友,放双人床
   const g = new THREE.Group();
@@ -1508,6 +1723,7 @@ function addHouse(x, z, s, ry, wallColor, roofColor, floors = 1, doubleBed = fal
       g.add(step);
     }
   }
+  // 现代公寓式平屋顶；正面仍然敞开，屋内和每层都能看清。
   const roof = new THREE.Mesh(
     new THREE.ConeGeometry(8.6, 5, 4),
     new THREE.MeshLambertMaterial({ color: roofColor }));
@@ -1536,6 +1752,24 @@ function addHouse(x, z, s, ry, wallColor, roofColor, floors = 1, doubleBed = fal
       new THREE.MeshLambertMaterial({ color: 0xa5713f }));
     stool.position.set(sx, 0.55, -1.5 + (sx < 0 ? -1.2 : 1.2)); g.add(stool);
   });
+  // 一楼生活厨房：恶劣天气回家后可以把钓到的鱼放进锅里做饭。
+  const kitchen = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.45, 1.3), new THREE.MeshLambertMaterial({ color: 0xe5e2d8 }));
+  kitchen.position.set(3.4, .72, 1.9); g.add(kitchen);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(.62, .55, .62, 12), new THREE.MeshLambertMaterial({ color: 0x525a5e }));
+  pot.position.set(3.4, 1.75, 1.9); g.add(pot);
+  const potLid = new THREE.Mesh(new THREE.CylinderGeometry(.68, .68, .1, 12), new THREE.MeshLambertMaterial({ color: 0xc2c7c8 }));
+  potLid.position.set(4.25, 1.86, 1.9); potLid.rotation.z = 1.15; g.add(potLid);
+  const rice = new THREE.Mesh(new THREE.CylinderGeometry(.49, .49, .12, 12), new THREE.MeshLambertMaterial({ color: 0xf4d77a }));
+  rice.position.set(3.4, 2.09, 1.9); g.add(rice);
+  const cook = makePerson({ h: .62, shirt: [0xd96b62,0x5f98c6,0x75a96b,0xd9a949][homeIndex % 4], pants: 0x46515c, hair: 0x493126 });
+  cook.g.position.set(2.05, .2, 1.9); cook.g.rotation.y = Math.PI / 2; g.add(cook.g);
+  const spatula = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 1.7, 6), new THREE.MeshLambertMaterial({ color: 0x765035 }));
+  spatula.position.set(3.05, 2.36, 1.9); spatula.rotation.z = -.62; g.add(spatula);
+  const steam = [0, 1].map(i => {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(.18 + i * .04, 7, 6), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .58 }));
+    puff.position.set(3.2 + i * .35, 2.55 + i * .28, 1.9); g.add(puff); return puff;
+  });
+  homeCooks.push({ p: cook, spatula, rice, steam, phase: homeIndex * .63 });
   // 每层一张小床 + 一张圆地毯,房间不再空荡荡（每层被子颜色不一样）
   const blanketCols = [0xe85a6a, 0x5aa9e6, 0x7bc86c];
   const rugCols = [0xf0b8c8, 0xa8d8e8, 0xf5d8a0];
@@ -1547,7 +1781,43 @@ function addHouse(x, z, s, ry, wallColor, roofColor, floors = 1, doubleBed = fal
       new THREE.MeshLambertMaterial({ color: rugCols[f % 3] }));
     rug.position.set(0.6, f === 0 ? 0.36 : 7 * f + 0.17, 1.6);
     g.add(rug);
+    // 精装楼层：布艺沙发、落地灯和挂画。前面保持敞开，点击进屋时能看清。
+    const fy = 7 * f;
+    const sofaMat = new THREE.MeshLambertMaterial({ color: f % 2 ? 0x5b7285 : 0x758a72 });
+    const sofa = new THREE.Mesh(new THREE.BoxGeometry(2.8, .8, 1.15), sofaMat);
+    sofa.position.set(1.5, fy + .75, -2.8); g.add(sofa);
+    const backrest = new THREE.Mesh(new THREE.BoxGeometry(2.8, .7, .18), sofaMat);
+    backrest.position.set(1.5, fy + 1.28, -3.27); g.add(backrest);
+    const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, 2.7, 8), new THREE.MeshLambertMaterial({ color: 0x39454c }));
+    lampPole.position.set(3.7, fy + 1.35, -2.9); g.add(lampPole);
+    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(.45, .55, 12), new THREE.MeshLambertMaterial({ color: 0xffe1a3, emissive: 0xffbf58, emissiveIntensity: .22 }));
+    lampShade.position.set(3.7, fy + 2.8, -2.9); lampShade.rotation.x = Math.PI; g.add(lampShade);
+    const painting = new THREE.Mesh(new THREE.BoxGeometry(1.65, 1.1, .08), new THREE.MeshLambertMaterial({ color: f % 2 ? 0x75b9d5 : 0xe9a76f }));
+    painting.position.set(2.1, fy + 4.4, -4.02); g.add(painting);
   }
+  // 每座住宅都有一名始终可见的室内小朋友；活动轮换为写作业、看书、搭积木和吃饭。
+  const activity = ['study', 'read', 'play', 'eat'][homeIndex % 4];
+  const child = makePerson({ h: .58, shirt: [0xe36d68,0x5d9ed0,0x7caf71,0xe1b44d][homeIndex % 4], pants: 0x48566a, hair: 0x493126 });
+  child.g.position.set(-.4, .2, .25); child.g.rotation.y = Math.PI; g.add(child.g);
+  let activityProp;
+  if (activity === 'study') {
+    activityProp = new THREE.Mesh(new THREE.BoxGeometry(1.05, .08, .75), new THREE.MeshLambertMaterial({ color: 0xf6f0d4 }));
+    activityProp.position.set(.5, 1.82, -1.5); g.add(activityProp);
+  } else if (activity === 'read') {
+    activityProp = new THREE.Mesh(new THREE.BoxGeometry(.85, .08, .62), new THREE.MeshLambertMaterial({ color: 0x5a8ec7 }));
+    activityProp.position.set(0, 2.12, -.45); activityProp.rotation.x = -.45; child.g.add(activityProp);
+  } else if (activity === 'play') {
+    activityProp = new THREE.Group();
+    [0xe85d5d,0x5a9ed0,0xf0c44d].forEach((color, i) => {
+      const block = new THREE.Mesh(new THREE.BoxGeometry(.45, .45, .45), new THREE.MeshLambertMaterial({ color }));
+      block.position.set(-1.2 + i * .55, .35 + (i === 1 ? .35 : 0), 1.25); activityProp.add(block);
+    });
+    g.add(activityProp);
+  } else {
+    activityProp = new THREE.Mesh(new THREE.CylinderGeometry(.42, .34, .24, 10), new THREE.MeshLambertMaterial({ color: 0xf4d77a }));
+    activityProp.position.set(.5, 1.9, -1.5); g.add(activityProp);
+  }
+  homeActivityKids.push({ p: child, activity, prop: activityProp, phase: homeIndex * .71, house: g });
   const chimney = new THREE.Mesh(
     new THREE.BoxGeometry(1.2, 2.6, 1.2),
     new THREE.MeshLambertMaterial({ color: 0xb0593f }));
@@ -1556,6 +1826,10 @@ function addHouse(x, z, s, ry, wallColor, roofColor, floors = 1, doubleBed = fal
   g.rotation.y = ry;
   g.scale.setScalar(s);
   scene.add(g);
+  g.userData.floors = floors;
+  g.userData.indoorKidCount = 1;
+  g.userData.hasActiveCook = true;
+  residentialHouses.push(g);
   return g;
 }
 const house1 = addHouse(-118, -88, 1.5, 0.6, 0xf0e6d2, 0x9a6b4f, 2, true);   // 升成两层,一楼双人床(两个小朋友住)
@@ -1574,6 +1848,13 @@ const house10 = addHouse(-60, -160, 1.4, 0.2, 0xf0e0e8, 0x5a8a6a, 2);  // 绿顶
 const house11 = addHouse(20, -168, 1.35, -0.15, 0xe0e8f0, 0xc47a4a, 3); // 橙顶淡蓝墙,三层
 const house12 = addHouse(95, -158, 1.4, -0.35, 0xf5ead0, 0x6a5a9a, 2); // 紫顶米黄墙,两层
 const house13 = addHouse(-158, -168, 1.45, 0.5, 0xe8f0e0, 0xb06a5a);   // 红顶淡绿墙
+// 左右两侧和桥后方补充住宅，房屋之间留出清楚的街区间距。
+const house14 = addHouse(-218, -88, 1.62, 0.22, 0xe5edf2, 0x5d82a2, 2);
+const house15 = addHouse(218, -92, 1.62, -0.22, 0xf2e7d8, 0xb16b4d, 2);
+const house16 = addHouse(-48, -58, 1.55, 0.08, 0xe7efdc, 0x6b925b, 2);
+const house17 = addHouse(48, -62, 1.55, -0.08, 0xeee3ed, 0x8d6998, 3);
+[house1,house2,house3,house4,house5,house6,house7,house8,house9,house10,house11,house12,house13,house14,house15,house16,house17]
+  .forEach(h => h.scale.multiplyScalar(1.06));
 
 /* ---- 娃娃屋：正面打开，能看到屋里的人在动（点它可以进屋看） ---- */
 const dollhouse = new THREE.Group();
@@ -1633,7 +1914,7 @@ const dollLamp = new THREE.PointLight(0xffd9a0, 0.5, 22, 1.5);
 }
 // 点哪座房子都能进屋看
 const enterableHouses = [dollhouse, house1, house2, house3, house4, house5, house6, house7, house8, house9,
-  house10, house11, house12, house13];
+  house10, house11, house12, house13, house14, house15, house16, house17];
 
 /* ---- 龙卷风刮到房子/牛羊/蜜蜂/村民/大树：登记谁会被卷上天 ---- */
 const liftBaseScale = new Map();
@@ -1769,18 +2050,17 @@ function updatePanic(dt, t) {
   });
 }
 
-/* ---- 后排新房子的住户:一直有人在屋里走动,没有空房子（和娃娃屋的人一样走来走去） ---- */
+/* ---- 多层住宅的上层住户：每个二/三楼都有人，不再全部挤在一楼 ---- */
 const housePacers = [];
-[
-  [house10, 0.85, 0xff8a6a, 0.3,  0],    // 一楼
-  [house11, 0.8,  0x6ac8a8, 14.3, 2.1],  // 三楼
-  [house12, 0.85, 0x8a8ae8, 7.3,  4.0],  // 二楼
-  [house13, 0.9,  0xd8c85a, 0.3,  1.2],  // 一楼
-].forEach(([house, h, shirt, floorY, phase]) => {
-  const p = makePerson({ h, shirt, pants: 0x4a5a6a });
-  p.g.position.set(0, floorY, 0);
-  house.add(p.g);
-  housePacers.push({ p, floorY, phase });
+residentialHouses.forEach((house, hi) => {
+  for (let floor = 1; floor < house.userData.floors; floor++) {
+    const floorY = floor * 7;
+    const p = makePerson({ h: .8 + ((hi + floor) % 3) * .05,
+      shirt: [0xff8a6a,0x6ac8a8,0x8a8ae8,0xd8c85a][(hi + floor) % 4], pants: 0x4a5a6a });
+    p.g.position.set(0, floorY + .3, 0);
+    house.add(p.g);
+    housePacers.push({ p, house, floor, floorY, phase: hi * .73 + floor * 1.4 });
+  }
 });
 
 /* ================= 公园健身器材 ================= */
@@ -1826,6 +2106,308 @@ function addTwister(x, z) {
 }
 addWalker(-30, 40, 0.5);
 const twister = addTwister(-24, 44);
+const gymUsers = gymSwings.slice(0, 2).map((s, i) => {
+  const p = makePerson({ h: .67, shirt: i ? 0x72a86b : 0x5a91c8, pants: 0x485668, hair: 0x453127 });
+  scene.add(p.g); return { p, swing: s.swing, phase: i * 1.2 };
+});
+
+/* ================= 城市公园改造：河岸步道、街道、游乐场和小摊 ================= */
+const cityConcrete = new THREE.MeshLambertMaterial({ color: 0x9ea6a8 });
+const asphalt = new THREE.MeshLambertMaterial({ color: 0x4e565b });
+const curbMat = new THREE.MeshLambertMaterial({ color: 0xd8d5cc });
+// 草坪是地图底色，只在活动区和商业街铺设明确边界的城市广场。
+[[ -108, 42, 54, 34 ], [ 76, 35, 40, 28 ], [ 0, -225, 420, 30 ]].forEach(([x,z,w,d]) => {
+  const plaza = new THREE.Mesh(new THREE.BoxGeometry(w, .12, d), new THREE.MeshLambertMaterial({ color: 0xb8bdbc }));
+  plaza.position.set(x, .07, z); scene.add(plaza);
+});
+function addRiverWalk(side) {
+  const pts = riverCurve.getSpacedPoints(56).map((p, i, arr) => {
+    const a = arr[Math.max(0, i - 1)], b = arr[Math.min(arr.length - 1, i + 1)];
+    const tx = b.x - a.x, tz = b.z - a.z, len = Math.hypot(tx, tz) || 1;
+    return new THREE.Vector3(p.x + side * (-tz / len) * 13, .19, p.z + side * (tx / len) * 13);
+  });
+  const path = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, 4.8, 8), cityConcrete);
+  path.scale.y = .035; scene.add(path); riverWalks.push(path);
+}
+const riverWalks = [];
+addRiverWalk(1);
+function addRoad(x, z, w, d) {
+  const road = new THREE.Mesh(new THREE.BoxGeometry(w, .18, d), asphalt);
+  road.position.set(x, .11, z); scene.add(road);
+  [-1, 1].forEach(side => {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(w, .25, .55), curbMat);
+    curb.position.set(x, .22, z + side * d / 2); scene.add(curb);
+  });
+  for (let px = x - w / 2 + 8; px < x + w / 2; px += 16) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(7, .03, .45), new THREE.MeshLambertMaterial({ color: 0xf6e8b2 }));
+    stripe.position.set(px, .22, z); scene.add(stripe);
+  }
+}
+// 城市主路放在住宅与商业街之间，与远山保持明显距离。
+const trafficCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(-300, .16, -188), new THREE.Vector3(-195, .16, -198),
+  new THREE.Vector3(-82, .16, -191), new THREE.Vector3(38, .16, -200),
+  new THREE.Vector3(164, .16, -190), new THREE.Vector3(300, .16, -198)
+]);
+const trafficRoad = new THREE.Mesh(new THREE.TubeGeometry(trafficCurve, 150, 6.2, 8), asphalt);
+trafficRoad.scale.y = .035; scene.add(trafficRoad);
+const trafficCars = [];
+function addTrafficCar(color, u, speed) {
+  const g = new THREE.Group(), paint = new THREE.MeshLambertMaterial({ color });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.05, 2.35), paint); body.position.y = .85; g.add(body);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.8, .95, 2.05), new THREE.MeshLambertMaterial({ color: 0xaed7e5, transparent: true, opacity: .86 })); cabin.position.set(.25, 1.75, 0); g.add(cabin);
+  [-1.8, 1.8].forEach(px => [-1.08, 1.08].forEach(pz => { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.48, .48, .3, 10), new THREE.MeshLambertMaterial({ color: 0x272b2d })); wheel.rotation.x = Math.PI / 2; wheel.position.set(px, .48, pz); g.add(wheel); }));
+  scene.add(g); trafficCars.push({ g, u, speed });
+}
+[[0xd94b43, .04, .026], [0x3b8ec4, .30, .021], [0xf0b63e, .55, .029], [0x4c9b70, .77, .024], [0xffffff, .91, .019]].forEach(v => addTrafficCar(...v));
+function addAnimalPen(x, z, w, d) {
+  const lawn = new THREE.Mesh(new THREE.BoxGeometry(w, .12, d), new THREE.MeshLambertMaterial({ color: 0x7cad62 }));
+  lawn.position.set(x, .09, z); scene.add(lawn);
+  const wood = new THREE.MeshLambertMaterial({ color: 0x9a704c });
+  for (let px = x - w / 2; px <= x + w / 2; px += 4) {
+    [-1, 1].forEach(side => { const post = new THREE.Mesh(new THREE.BoxGeometry(.12, 1.25, .12), wood); post.position.set(px, .68, z + side * d / 2); scene.add(post); });
+  }
+  for (let pz = z - d / 2; pz <= z + d / 2; pz += 4) {
+    [-1, 1].forEach(side => { const post = new THREE.Mesh(new THREE.BoxGeometry(.12, 1.25, .12), wood); post.position.set(x + side * w / 2, .68, pz); scene.add(post); });
+  }
+  [[0, .45], [0, .9]].forEach(([, y]) => {
+    [-1, 1].forEach(side => { const rail = new THREE.Mesh(new THREE.BoxGeometry(w, .08, .08), wood); rail.position.set(x, y, z + side * d / 2); scene.add(rail); });
+    [-1, 1].forEach(side => { const rail = new THREE.Mesh(new THREE.BoxGeometry(.08, .08, d), wood); rail.position.set(x + side * w / 2, y, z); scene.add(rail); });
+  });
+}
+addAnimalPen(-140, 70, 32, 24);
+addAnimalPen(135, 70, 34, 24);
+function addStreetLamp(x, z) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.16, .2, 10.5, 8), new THREE.MeshLambertMaterial({ color: 0x48555b }));
+  pole.position.set(x, 5.25, z); scene.add(pole);
+  const light = new THREE.Mesh(new THREE.SphereGeometry(.45, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffe0a0, emissive: 0xffc86a, emissiveIntensity: .3 }));
+  light.position.set(x, 10.5, z); scene.add(light);
+}
+const streetLampSites = [[-270,-178],[-205,-187],[-140,-180],[-75,-183],[-10,-188],[55,-189],[120,-180],[185,-181],[250,-186],
+  [-270,-207],[-205,-209],[-140,-204],[-75,-205],[-10,-211],[55,-211],[120,-202],[185,-203],[250,-207]];
+streetLampSites.forEach(([x,z]) => addStreetLamp(x, z));
+function makeShopSign(text, color) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fffdf8'; ctx.fillRect(0, 0, 512, 128);
+  ctx.strokeStyle = '#' + new THREE.Color(color).getHexString(); ctx.lineWidth = 12; ctx.strokeRect(6, 6, 500, 116);
+  ctx.fillStyle = '#344047'; ctx.font = 'bold 58px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 66);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true })); sign.scale.set(12, 3, 1); return sign;
+}
+const commercialBuildings = [], shopKeepers = [], shopCustomers = [], indoorPlayKids = [], restaurantCooks = [], restaurantTables = [];
+let indoorPlaySlide = null;
+function addShopItem(g, type, x, y, z, color, scale = 1) {
+  let item;
+  if (type === 'bottle') item = new THREE.Mesh(new THREE.CylinderGeometry(.14 * scale, .18 * scale, .75 * scale, 8), new THREE.MeshLambertMaterial({ color }));
+  else if (type === 'food') { item = new THREE.Mesh(new THREE.SphereGeometry(.28 * scale, 8, 6), new THREE.MeshLambertMaterial({ color })); item.scale.y = .7; }
+  else item = new THREE.Mesh(new THREE.BoxGeometry(.6 * scale, .65 * scale, .42 * scale), new THREE.MeshLambertMaterial({ color }));
+  item.position.set(x, y, z); g.add(item); return item;
+}
+function addCommercialBuilding(x, z, cfg) {
+  const g = new THREE.Group(), wall = new THREE.MeshLambertMaterial({ color: cfg.wall });
+  const back = new THREE.Mesh(new THREE.BoxGeometry(38, 10, .45), wall); back.position.set(0, 5, -6); g.add(back);
+  [-19, 19].forEach(px => { const side = new THREE.Mesh(new THREE.BoxGeometry(.45, 10, 13), wall); side.position.set(px, 5, 0); g.add(side); });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(38, .3, 13), new THREE.MeshLambertMaterial({ color: 0xd7c4a5 })); floor.position.y = .15; g.add(floor);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(21, 4.2, 4), new THREE.MeshLambertMaterial({ color: cfg.roof }));
+  roof.position.y = 12.1; roof.rotation.y = Math.PI / 4; roof.scale.z = .42; g.add(roof);
+  const sign = makeShopSign(cfg.label, cfg.accent); sign.position.set(0, 8.3, 1.8); g.add(sign);
+  const shelfMat = new THREE.MeshLambertMaterial({ color: 0x8b6747 });
+  if (cfg.type === 'market' || cfg.type === 'cosmetics' || cfg.type === 'toy' || cfg.type === 'shoes') {
+    [-11, -4, 3].forEach(sx => {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(5.5, .22, 2.3), shelfMat); shelf.position.set(sx, 1.2, -3.8); g.add(shelf);
+      for (let i = 0; i < 7; i++) {
+        const cols = cfg.type === 'market' ? [0xc79b62,0xd9604b,0x70a958,0xf1cf5b] : cfg.type === 'cosmetics' ? [0xe86489,0xf1b8c8,0x9d78c7,0xf3d6a0] : cfg.type === 'shoes' ? [0x6b4f3a,0xe45e62,0x4f77a8,0xe7c052] : [0x4fa9dc,0xf1c64d,0xe7665c,0x75bd75];
+        const item = addShopItem(g, cfg.type === 'cosmetics' ? 'bottle' : cfg.type === 'market' ? 'food' : 'box', sx - 2.1 + i * .7, cfg.type === 'cosmetics' ? 1.75 : 1.65, -3.8, cols[i % cols.length], cfg.type === 'market' ? 1.2 : 1);
+        if (cfg.type === 'shoes') item.scale.set(1.35, .45, 1.8);
+      }
+    });
+  }
+  if (cfg.type === 'clothes') {
+    [-10, 0, 10].forEach((sx, rackI) => {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 7, 7), new THREE.MeshLambertMaterial({ color: 0x4f5559 })); bar.rotation.z = Math.PI / 2; bar.position.set(sx, 4.8, -2.8); g.add(bar);
+      [0xe95f72,0x5c9bd3,0xe7bb4f,0x75ad72].forEach((col, i) => { const shirt = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.8, .18), new THREE.MeshLambertMaterial({ color: col })); shirt.position.set(sx - 2.3 + i * 1.5, 3.7, -2.8); g.add(shirt); });
+    });
+  }
+  if (cfg.type === 'restaurant') {
+    [-10, 0, 10].forEach((sx, i) => {
+      const tableMat = new THREE.MeshLambertMaterial({ color: 0x9a704d });
+      const table = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, .2, 16), tableMat); table.position.set(sx, 1.6, -1.8); g.add(table);
+      const tableLeg = new THREE.Mesh(new THREE.CylinderGeometry(.2, .28, 1.5, 10), tableMat);
+      tableLeg.position.set(sx, .8, -1.8); g.add(tableLeg);
+      restaurantTables.push({ top: table, leg: tableLeg });
+      addShopItem(g, 'food', sx, 1.9, -1.8, [0xe7684f,0x73a95b,0xf0c64e][i], 1.8);
+    });
+    const kitchen = new THREE.Mesh(new THREE.BoxGeometry(11, 2.4, 2.3), new THREE.MeshLambertMaterial({ color: 0xe8e4da })); kitchen.position.set(0, 1.2, -4.8); g.add(kitchen);
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(.7, .62, .7, 12), new THREE.MeshLambertMaterial({ color: 0x555d61 })); pot.position.set(0, 2.75, -4.8); g.add(pot);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(.76, .76, .12, 12), new THREE.MeshLambertMaterial({ color: 0xb8bec0 })); lid.position.set(1.25, 2.72, -4.8); lid.rotation.z = 1.15; g.add(lid);
+    const rice = new THREE.Mesh(new THREE.CylinderGeometry(.56, .56, .13, 12), new THREE.MeshLambertMaterial({ color: 0xf2d26b })); rice.position.set(0, 3.12, -4.8); g.add(rice);
+    const cook = makePerson({ h: .68, shirt: 0xf2f0e8, pants: 0x394956, hair: 0x3d2b24 });
+    cook.g.position.set(0, .2, -3.15); cook.g.rotation.y = Math.PI; g.add(cook.g);
+    const spatula = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 2, 6), new THREE.MeshLambertMaterial({ color: 0x765035 }));
+    spatula.position.set(.45, 3.35, -4.2); spatula.rotation.z = -.55; g.add(spatula);
+    const steam = [0,1,2].map(i => {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(.2 + i * .04, 7, 6), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .62 }));
+      puff.position.set((i - 1) * .32, 3.55 + i * .28, -4.8); g.add(puff); return puff;
+    });
+    restaurantCooks.push({ p: cook, spatula, rice, steam });
+  }
+  if (cfg.type === 'play') {
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(3, .3, 8), new THREE.MeshLambertMaterial({ color: 0xf2bd43 })); slide.position.set(-7, 2.2, -1); slide.rotation.x = .42; g.add(slide);
+    indoorPlaySlide = slide;
+    for (let i = 0; i < 28; i++) addShopItem(g, 'food', 5 + (Math.random() - .5) * 9, .45 + Math.random() * .7, -1 + (Math.random() - .5) * 5, [0xe85d5d,0x59a8dd,0xf2c64d,0x78b96b][i % 4], .75);
+    for (let i = 0; i < 4; i++) {
+      const child = makePerson({ h: .52, shirt: [0xe85d68,0x5b9fd0,0xf0bd4b,0x72ad78][i], pants: 0x48566a, hair: 0x483027 });
+      child.g.position.set(-7 + i * 4.2, .2, -1 + (i % 2) * 2); g.add(child.g);
+      indoorPlayKids.push({ p: child, phase: i * 1.3, kind: i < 2 ? 'slide' : 'balls' });
+    }
+  }
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(7, 2.1, 1.5), new THREE.MeshLambertMaterial({ color: cfg.accent })); counter.position.set(14, 1.05, -3.8); g.add(counter);
+  const seller = makePerson({ h: .66, shirt: cfg.accent, pants: 0x46515c, hair: 0x4a3027 }); seller.g.position.set(14, .25, -5); seller.g.rotation.y = Math.PI; g.add(seller.g);
+  shopKeepers.push({ p: seller, phase: commercialBuildings.length * .8 });
+  const customer = makePerson({ h: .62, shirt: [0x5c9ed0,0xe47770,0x79a96e][commercialBuildings.length % 3], pants: 0x4c5968, hair: 0x493126 });
+  customer.g.position.set(-10, .2, -1.5); g.add(customer.g);
+  let mealBowl = null;
+  if (cfg.type === 'restaurant') {
+    mealBowl = new THREE.Mesh(new THREE.CylinderGeometry(.34, .25, .2, 10), new THREE.MeshLambertMaterial({ color: 0xf4d77a }));
+    mealBowl.position.set(.58, 2.05, -.35); mealBowl.visible = false; customer.g.add(mealBowl);
+  }
+  shopCustomers.push({ p: customer, phase: commercialBuildings.length * 1.1, type: cfg.type, changed: false, mealBowl, mealState: 'buying' });
+  g.position.set(x, 0, z); g.scale.setScalar(1.06); g.userData.label = cfg.label; g.userData.type = cfg.type; scene.add(g); commercialBuildings.push(g); return g;
+}
+[
+  [-180, 'play', '室内游乐场', 0xe8dfd0, 0xd85d57, 0xeaa84a],
+  [-120, 'restaurant', '美味餐厅', 0xeee3d6, 0xc76848, 0xe58b58],
+  [-60, 'clothes', '新衣服店', 0xe7e0ec, 0x8d68ad, 0x8d68ad],
+  [0, 'shoes', '新鞋子店', 0xe9e2d5, 0x8b6549, 0xb27a55],
+  [60, 'cosmetics', '化妆品店', 0xf0dde5, 0xc85d83, 0xd9789a],
+  [120, 'market', '城市超市', 0xdce8df, 0x59916a, 0x69a876],
+  [180, 'toy', '玩具商店', 0xdce5ed, 0x4f87b4, 0x5b9ed0]
+].forEach(([x,type,label,wall,roof,accent]) => addCommercialBuilding(x, -225, { type,label,wall,roof,accent }));
+enterableHouses.push(...commercialBuildings);
+
+/* ---- 固定交通体验馆：停靠展品可点击进入，移动中的飞机和船不载人避难 ---- */
+const transportExhibits = [];
+function addTransportExhibit(x, z, label, type, color) {
+  const g = new THREE.Group();
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(30, .28, 18), new THREE.MeshLambertMaterial({ color: 0xc7cbca }));
+  floor.position.y = .14; g.add(floor);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(30, 8, .4), new THREE.MeshLambertMaterial({ color: 0xe8ece9 }));
+  back.position.set(0, 4, -8.7); g.add(back);
+  [-15, 15].forEach(sx => {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(.4, 8, 18), new THREE.MeshLambertMaterial({ color: 0xd7ddda }));
+    side.position.set(sx, 4, 0); g.add(side);
+  });
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(17, 3.8, 4), new THREE.MeshLambertMaterial({ color }));
+  roof.position.y = 9.8; roof.rotation.y = Math.PI / 4; roof.scale.z = .55; g.add(roof);
+  const sign = makeShopSign(label, color); sign.position.set(0, 7.1, 1.5); g.add(sign);
+
+  const model = new THREE.Group(), paint = new THREE.MeshLambertMaterial({ color });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x8fc9e5, transparent: true, opacity: .82 });
+  if (type === 'plane') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.05, 10, 16), paint); body.rotation.z = Math.PI / 2; model.add(body);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 10), paint); nose.scale.x = 1.4; nose.position.x = 5; model.add(nose);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(3.2, .3, 13), paint); wing.position.y = .1; model.add(wing);
+    const cockpit = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), glass); cockpit.scale.set(1.7,.7,.85); cockpit.position.set(3,1,0); model.add(cockpit);
+  } else if (type === 'boat') {
+    const hull = new THREE.Mesh(new THREE.SphereGeometry(3.6, 14, 10), paint); hull.scale.set(2.2,.55,1); hull.position.y = 1.1; model.add(hull);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(5, 2.5, 4), new THREE.MeshLambertMaterial({ color: 0xf0eee4 })); cabin.position.set(-1,2.7,0); model.add(cabin);
+    const window = new THREE.Mesh(new THREE.BoxGeometry(.3,1.2,3.2), glass); window.position.set(1.65,3,0); model.add(window);
+  } else {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 11, 18), paint); body.rotation.z = Math.PI / 2; model.add(body);
+    [-5.5, 5.5].forEach(sx => { const end = new THREE.Mesh(new THREE.SphereGeometry(2.3, 16, 10), paint); end.scale.x = .65; end.position.x = sx; model.add(end); });
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.4), paint); tower.position.set(0,2.6,0); model.add(tower);
+    [-3,0,3].forEach(sx => { const port = new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,.12,12), glass); port.rotation.x = Math.PI/2; port.position.set(sx,.25,2.28); model.add(port); });
+  }
+  model.position.set(-2, 2.3, -1); model.scale.setScalar(.82); g.add(model);
+  const guide = makePerson({ h: .63, shirt: color, pants: 0x465464, hair: 0x493026 });
+  guide.g.position.set(10, .2, -4.5); guide.g.rotation.y = Math.PI; g.add(guide.g);
+  g.position.set(x, 0, z); g.userData.label = label; g.userData.type = type; scene.add(g); transportExhibits.push(g); return g;
+}
+addTransportExhibit(-235, 72, '红色飞机体验舱', 'plane', 0xd94e45);
+enterableHouses.push(...transportExhibits);
+
+const stallNPCs = [];
+function addFoodStall(x, z, color, kind) {
+  const g = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ color });
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(10, 2.5, 3.2), new THREE.MeshLambertMaterial({ color: 0xf0c99c })); counter.position.set(0, 1.25, 0); g.add(counter);
+  [-4.4, 4.4].forEach(px => { const post = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, 5.2, 6), mat); post.position.set(px, 2.6, 0); g.add(post); });
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(10.8, .38, 4.4), mat); awning.position.y = 5.15; g.add(awning);
+  for (let i = 0; i < 7; i++) addShopItem(g, kind === 'toy' ? 'box' : kind === 'drink' ? 'bottle' : 'food', -3.8 + i * 1.25, 2.75, .5, [0xe86555,0xf2c34a,0x6faf67,0x5fa3d0][i % 4], 1.25);
+  const boss = makePerson({ h: .68, shirt: color, pants: 0x46515b, hair: 0x3f2d24 }); boss.g.position.set(0, .2, -1.8); boss.g.rotation.y = Math.PI; g.add(boss.g);
+  stallNPCs.push({ g, boss });
+  g.position.set(x, 0, z); scene.add(g);
+}
+addFoodStall(38, 56, 0xe85f55, 'food'); addFoodStall(51, 56, 0xf0a942, 'food');
+addFoodStall(64, 56, 0x55a7c7, 'drink'); addFoodStall(77, 56, 0x7e69bd, 'toy'); addFoodStall(90, 56, 0x62a86d, 'food');
+let playSeesaw = null, outdoorPlaySlide = null;
+function addPlayground() {
+  const g = new THREE.Group();
+  const red = new THREE.MeshLambertMaterial({ color: 0xef6d5d }), blue = new THREE.MeshLambertMaterial({ color: 0x4b9bd3 }), yellow = new THREE.MeshLambertMaterial({ color: 0xf2c84b });
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(3.2, .3, 3.2), blue); tower.position.set(0, 3.8, 0); g.add(tower);
+  [-1.3, 1.3].forEach(px => [-1.3, 1.3].forEach(pz => { const leg = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, 3.8, 6), blue); leg.position.set(px, 1.9, pz); g.add(leg); }));
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(2.2, .22, 7.5), yellow); slide.position.set(0, 2, 4); slide.rotation.x = .43; g.add(slide); outdoorPlaySlide = slide;
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 6.5, 8), red); bar.rotation.z = Math.PI / 2; bar.position.set(7, 4, 0); g.add(bar);
+  [4.3, 9.7].forEach(px => { const post = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, 4, 6), red); post.position.set(px, 2, 0); g.add(post); });
+  [-1.2, 1.2].forEach(dx => { const rope = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 2.2, 5), red); rope.position.set(7 + dx, 2.9, 0); g.add(rope); const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, .14, .55), blue); seat.position.set(7 + dx, 1.75, 0); g.add(seat); });
+  playSeesaw = new THREE.Group();
+  const pivot = new THREE.Mesh(new THREE.ConeGeometry(.65, 1.4, 8), red); pivot.position.y = .7; playSeesaw.add(pivot);
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(8, .28, .65), yellow); beam.position.y = 1.45; playSeesaw.add(beam);
+  [-3.4, 3.4].forEach(px => { const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, .18, 1), blue); seat.position.set(px, 1.7, 0); playSeesaw.add(seat); });
+  playSeesaw.position.set(-8, 0, -7); g.add(playSeesaw);
+  g.position.set(-112, 0, 42); scene.add(g);
+}
+addPlayground();
+const cityKids = [];
+function addCityKid(x, z, shirt, kind, phase) {
+  const p = makePerson({ h: .7 + Math.random() * .12, shirt, pants: 0x455b78, hair: 0x4b3028 });
+  p.g.position.set(x, 0, z); scene.add(p.g);
+  if (kind === 'eat') {
+    const snack = new THREE.Mesh(new THREE.ConeGeometry(.14, .55, 6), new THREE.MeshLambertMaterial({ color: 0xf2c84b }));
+    snack.position.set(.72, 3.45, .15); p.g.add(snack); p.armR.rotation.x = -1.1;
+  }
+  cityKids.push({ p, x, z, kind, phase });
+}
+[[0xff8b78,'slide'], [0x5daee2,'slide'], [0xf0c64f,'swing'], [0x9d7be7,'swing'], [0x72c78f,'seesaw'], [0xf08f56,'seesaw'], [0xff9d4d,'eat'], [0xe96e9a,'eat'], [0x57b9b0,'eat']]
+  .forEach(([color, kind], i) => addCityKid(kind === 'eat' ? 65 + i * 4 : -116 + i * 3, kind === 'eat' ? 31 : 38 + (i % 3) * 4, color, kind, i * .9));
+// 后山有人沿着山径慢慢爬，远景不再只是静止的模型。
+const mountainHikers = [];
+const climbRoutes = [
+  [-210,-385,70,92,.55],[-210,-385,70,92,1.15],[-210,-385,70,92,1.95],
+  [125,-395,78,105,.45],[125,-395,78,105,1.05],[125,-395,78,105,1.7],
+  [-60,-420,96,118,.7],[-60,-420,96,118,1.45],[285,-435,105,136,.9],[285,-435,105,136,1.8]
+];
+const ropeMat = new THREE.MeshLambertMaterial({ color: 0x6c4a2f });
+climbRoutes.forEach(([cx,cz,r,h,a], i) => {
+  const d = r * (.4 + (i % 3) * .09), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, y = h * (1 - d / r) - 1;
+  const p = makePerson({ h: .72, shirt: [0x4f88b8,0xe0725f,0xf0ba42,0x6ea46a,0x9a6db1][i % 5], pants: 0x3f4650, hair: 0x4a3027 });
+  p.g.position.set(x, y, z); p.g.scale.setScalar(1.05); p.armL.rotation.x = p.armR.rotation.x = -1.25; scene.add(p.g);
+  const lowD = r * .78, low = new THREE.Vector3(cx + Math.cos(a) * lowD, h * (1 - lowD / r), cz + Math.sin(a) * lowD);
+  const highD = r * .28, high = new THREE.Vector3(cx + Math.cos(a) * highD, h * (1 - highD / r), cz + Math.sin(a) * highD);
+  const rope = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(low, high), 18, .09, 6), ropeMat); scene.add(rope);
+  mountainHikers.push({ p, home: new THREE.Vector3(x,y,z), low, phase: i * 1.1, rainT: 0 });
+});
+// 孩子从桥面过河；桥下仍留给船通行。
+const bridgeWalkers = [];
+[[0x5daee2, 0], [0xf0a55e, Math.PI], [0x9d7be7, 1.3]].forEach(([shirt, phase]) => {
+  const p = makePerson({ h: .68, shirt, pants: 0x44505d, hair: 0x4a3027 });
+  p.g.scale.setScalar(.92); scene.add(p.g);
+  bridgeWalkers.push({ p, phase });
+});
+// 晴天时把人主要放在草坪、广场和摊位外，而不是塞进房间里来回走。
+const parkVisitors = [];
+const visitorSpots = [
+  [-74,62],[-60,70],[-44,58],[-28,72],[-8,64],[12,74],[28,68],[108,58],[122,46],[136,62],
+  [-154,34],[-142,44],[-128,28],[-96,70],[-82,58],[20,22],[48,72],[64,70],[80,72],[98,70],
+  [-172,72],[-188,54],[154,50],[170,66]
+];
+visitorSpots.forEach(([x,z], i) => {
+  const p = makePerson({ h: .66 + (i % 3) * .05, shirt: [0xe56b66,0x5a9dcf,0x75aa6b,0xe2b44b,0x9a72bd][i % 5], pants: 0x465567, hair: 0x473027 });
+  p.g.position.set(x, 0, z); scene.add(p.g);
+  const umbrella = new THREE.Group(), canopy = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: [0xe85d68,0x5c9fd2,0xf0bd4c][i % 3] }));
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0x555b5e })); handle.position.y = -1; umbrella.add(canopy, handle); umbrella.position.set(.7, 5.4, 0); umbrella.visible = false; p.g.add(umbrella);
+  const shopX = [-180,-120,-60,0,60,120,180].reduce((best, sx) => Math.abs(sx - x) < Math.abs(best - x) ? sx : best, -180);
+  parkVisitors.push({ p, umbrella, x, z, shelter: new THREE.Vector3(shopX, 0, -222), phase: i * .73, lane: (i % 3 - 1) * 1.15, indoors: false });
+});
 
 /* ================= 田宝 ================= */
 const girl = new THREE.Group();
@@ -2017,23 +2599,23 @@ idleAdults[8].h = goHomers[32]; idleAdults[9].h = goHomers[34];
   [1, 4, 7, 8, 10, 11, 14, 17, 30, 33].forEach(i => { goHomers[i].homework = true; });
 }
 
-/* ---- 全体村民的睡铺:每个房子每层床睡一个(house1 一楼双人床睡田宝+爷爷),同层睡不下的坐板凳打瞌睡 ---- */
+/* ---- 全体村民的睡铺:每层床睡一个，同层床位不够就睡现有沙发，不再另造板凳 ---- */
 {
   const L2 = (house, x, y, z) => house.localToWorld(new THREE.Vector3(x, y, z));
   const SLEEP_TABLE = [                      // [村民索引, 睡法, 房子, 楼层基y, (可选)床上的x]
-    [1,  'bench', house1, 0],                // 小孩 → 板凳(田宝没四肢,躺床)
+    [1,  'sofa', house1, 0],                 // 小孩 → 一楼现有沙发
     [4,  'bed',   house1, 0, -4.2],          // 田宝 → 双人床左枕头
     [0,  'bed',   house1, 0, -2.6],          // 爷爷 → 双人床右枕头
-    [9,  'bed',   house1, 7],   [20, 'bench', house1, 7],
-    [2,  'bed',   house2, 0],   [3,  'bench', house2, 0],
-    [10, 'bed',   house2, 7],   [21, 'bench', house2, 7],
-    [5,  'bed',   house3, 0],   [6,  'bench', house3, 0],
-    [7,  'bed',   house4, 0],   [22, 'bench', house4, 0],
-    [11, 'bed',   house4, 7],   [23, 'bench', house4, 7],
-    [8,  'bed',   house5, 0],   [24, 'bench', house5, 0],
+    [9,  'bed',   house1, 7],   [20, 'sofa', house1, 7],
+    [2,  'bed',   house2, 0],   [3,  'sofa', house2, 0],
+    [10, 'bed',   house2, 7],   [21, 'sofa', house2, 7],
+    [5,  'bed',   house3, 0],   [6,  'sofa', house3, 0],
+    [7,  'bed',   house4, 0],   [22, 'sofa', house4, 0],
+    [11, 'bed',   house4, 7],   [23, 'sofa', house4, 7],
+    [8,  'bed',   house5, 0],   [24, 'sofa', house5, 0],
     [12, 'bed',   house6, 0],   [13, 'bed',   house6, 7],
     [14, 'bed',   house7, 0],   [15, 'bed',   house7, 7],
-    [16, 'bed',   house8, 0],   [25, 'bed',   house8, 7],  [26, 'bench', house8, 7],
+    [16, 'bed',   house8, 0],   [25, 'bed',   house8, 7],  [26, 'sofa', house8, 7],
     [17, 'bed',   house8, 14],
     [18, 'bed',   house9, 0],   [27, 'bed',   house9, 7],  [19, 'bed',   house9, 14],
     [28, 'bed',   house10, 7],
@@ -2041,16 +2623,6 @@ idleAdults[8].h = goHomers[32]; idleAdults[9].h = goHomers[34];
     [32, 'bed',   house12, 0],  [33, 'bed',   house12, 7],
     [34, 'bed',   house13, 0],
   ];
-  const benchDone = new Set();               // 有板凳睡客的楼层,各放一张小板凳
-  SLEEP_TABLE.forEach(([, kind, house, fy]) => {
-    if (kind !== 'bench') return;
-    const key = house.uuid + '|' + fy;
-    if (benchDone.has(key)) return;
-    benchDone.add(key);
-    const b = makeBench();
-    b.position.set(3.2, fy, -1.5);
-    house.add(b);
-  });
   SLEEP_TABLE.forEach(([i, kind, house, fy, bx]) => {
     const h = goHomers[i];
     if (!h) return;
@@ -2058,7 +2630,7 @@ idleAdults[8].h = goHomers[32]; idleAdults[9].h = goHomers[34];
     // 床:枕头在房子 -z 一侧(床组放 house(-3.4,y,-2.0),枕头心在 z=-3.35),床垫面约 bedY+0.93。
     // 躺平是绕脚底原点转的、头朝 -z 伸展 4×scale,所以脚底原点要放在床尾:z = -3.35 + 4×scale,
     // 头正好落在枕头上;大人个子比床长,小腿伸出床尾一截(卡通效果,正常)。
-    const lp = kind === 'bench' ? [3.2, fy, -2.1]
+    const lp = kind === 'sofa' ? [1.5, fy + .72, -2.25]
       : [bx || -3.4, (fy === 0 ? 1.13 : fy + 0.96), +(-3.35 + 4.0 * h.p.g.scale.x).toFixed(2)];
     const w = L2(house, lp[0], lp[1], lp[2]);
     h.sleepSpot = { p: [w.x, w.y, w.z], ry: house.rotation.y, local: lp };
@@ -2157,6 +2729,12 @@ function rkWalkTo(rk, dt, t, speed) {   // 朝 (tx,tz) 走,到了返回 true
   return false;
 }
 function updateRiverKids(dt, t) {
+  // 河边玩法已取消。这一层只清理旧状态，绝不再写人物坐标；
+  // 下雨/夜晚时位置唯一由 goHomers 回家路线控制，避免两套状态机抢位置而抖动卡死。
+  riverKids.forEach(rk => {
+    if (rk.boat) { rk.boat.rider = null; rk.boat = null; }
+    rk.state = 'play'; rk.t = 1e9; rk.safe = true; rk.scaleTo = 1;
+  });
   for (let i = splashes.length - 1; i >= 0; i--) {   // 水花先走自己的物理
     const s = splashes[i];
     s.life -= dt; s.vy -= 12 * dt;
@@ -2166,6 +2744,9 @@ function updateRiverKids(dt, t) {
     s.m.material.opacity = Math.max(0, s.life / 0.8);
     if (s.life <= 0) { scene.remove(s.m); splashes.splice(i, 1); }
   }
+  return;
+
+  // 以下旧行程保留作历史兼容，但不会再进入；不要恢复它对人物坐标的控制。
   const canPlay = !state.nightTarget && !state.raining && !sciState.mode && !state.panic;
   let busy = riverKids.filter(r => r.state !== 'play').length;
   riverKids.forEach(rk => {
@@ -2192,7 +2773,7 @@ function updateRiverKids(dt, t) {
         rk.t -= dt;
         if (rk.t > 0) return;
         rk.safe = false; busy++;
-        if (Math.random() < 0.3) {   // 调皮路线:不坐船,直接往河里冲 → 等着扑通吧
+        if (false && Math.random() < 0.3) {   // 禁止直接冲进河里，统一去岸边等船
           rk.state = 'toWater';
           const p = riverCurve.getPointAt(nearestRiverU(g.position.x, g.position.z));
           rk.tx = p.x; rk.tz = p.z;
@@ -2263,7 +2844,13 @@ function updateRiverKids(dt, t) {
         if (rk.t <= 0) { rk.state = 'swim'; rk.t = 5; rk.scaleTo = 1; say('下水游泳啦！🏊', 2000); }   // 下船了,变回原来的大小
         break;
       }
-      case 'swim': {   // 趴在船边的水里游泳,跟着船走
+      case 'swim': {   // 旧状态也直接在船靠岸后下船，绝不进入水面
+        if (rk.boat) {
+          rk.boat.rider = null; rk.boat = null; rk.scaleTo = 1;
+          rkResetPose(rk); rk.state = 'exit';
+          [rk.tx, rk.tz] = riverBank(g.position.x, g.position.z);
+          break;
+        }
         rk.t -= dt;
         const b = rk.boat, ry = b.g.rotation.y, p = rk.pk.p;
         g.position.set(
@@ -2309,7 +2896,51 @@ function updateRiverKids(dt, t) {
       }
     }
   });
+  koiFish.forEach(k => {
+    k.u = (k.u + k.speed * state.riverFlow * dt) % 1;
+    const p = riverCurve.getPointAt(k.u), tangent = riverCurve.getTangentAt(k.u);
+    const nx = -tangent.z, nz = tangent.x;
+    k.fish.position.set(p.x + nx * k.side, .12 + Math.sin(t * 2.2 + k.phase) * .05, p.z + nz * k.side);
+    k.fish.rotation.y = Math.atan2(-tangent.z, tangent.x);
+    k.tail.rotation.y = Math.sin(t * 7 + k.phase) * .55;
+  });
+  trafficCars.forEach(car => {
+    car.u = (car.u + car.speed * dt) % 1;
+    const p = trafficCurve.getPointAt(car.u), tangent = trafficCurve.getTangentAt(car.u);
+    car.g.position.set(p.x, .08, p.z);
+    car.g.rotation.y = Math.atan2(-tangent.z, tangent.x);
+  });
 }
+
+/* ================= 河岸钓鱼：鱼进桶，恶劣天气拎桶撤离 ================= */
+const fishers = [];
+[.34, .52, .69].forEach((u, i) => {
+  const water = riverCurve.getPointAt(u), tangent = riverCurve.getTangentAt(u);
+  let nx = -tangent.z, nz = tangent.x;
+  if (nz < 0) { nx = -nx; nz = -nz; }
+  const home = new THREE.Vector3(water.x + nx * 12.5, 0, water.z + nz * 12.5);
+  const group = new THREE.Group(), person = makePerson({ h: .72, shirt: [0x537fa5,0x8d6ca4,0x5e9566][i], pants: 0x45515e, hair: 0x463025 });
+  person.g.rotation.y = Math.atan2(water.x - home.x, water.z - home.z); group.add(person.g);
+  const hand = new THREE.Vector3(.65, 3.3, .1), tip = new THREE.Vector3((water.x - home.x) * .72, 2.1, (water.z - home.z) * .72);
+  const rod = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(hand, tip), 10, .065, 6), new THREE.MeshLambertMaterial({ color: 0x6d4b2e })); group.add(rod);
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([tip, new THREE.Vector3(water.x - home.x, .38, water.z - home.z)]);
+  const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xe8edf0 })); group.add(line);
+  const bucket = new THREE.Group();
+  const bucketBody = new THREE.Mesh(new THREE.CylinderGeometry(1.05, .82, 1.7, 14), new THREE.MeshLambertMaterial({ color: 0x8fa7af })); bucketBody.position.y = .85; bucket.add(bucketBody);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(1.05, .07, 6, 14, Math.PI), new THREE.MeshLambertMaterial({ color: 0x3e4b50 })); handle.position.y = 1.65; bucket.add(handle);
+  const caught = [];
+  for (let f = 0; f < 3; f++) {
+    const fish = new THREE.Mesh(new THREE.SphereGeometry(.32, 8, 6), new THREE.MeshLambertMaterial({ color: f % 2 ? 0xf0eee5 : 0xe64f3b }));
+    fish.scale.set(1.6,.45,.7); fish.rotation.y = f * .8; fish.position.set((f - 1) * .32, 1.65 + f * .12, 0); fish.visible = false; bucket.add(fish); caught.push(fish);
+  }
+  bucket.position.set(-2, 0, 1.2); group.add(bucket);
+  const umbrella = new THREE.Group();
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1.25, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: [0xd95a5f,0x5a93c5,0xe1b147][i] }));
+  const umbrellaStick = new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,2.2,6), new THREE.MeshLambertMaterial({ color: 0x465056 })); umbrellaStick.position.y = -1;
+  umbrella.add(canopy, umbrellaStick); umbrella.position.set(.8,5.4,0); umbrella.visible = false; person.g.add(umbrella);
+  group.position.copy(home); scene.add(group);
+  fishers.push({ group, person, bucket, umbrella, caught, home, route: null, step: 0, catchT: 1 + i * 1.4, catchCount: 0, delivered: false, lane: (i - 1) * .8 });
+});
 
 /* ================= 白云 ================= */
 function makePuffTexture() {
@@ -2397,7 +3028,7 @@ function makeRainbow(inner, outer, reverse, maxOpacity) {
     vertexShader: RAINBOW_VERT, fragmentShader: RAINBOW_FRAG
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(240, 140), mat);
-  mesh.position.set(0, 55, -170);
+  mesh.position.set(0, 118, -510);
   mesh.renderOrder = 5;
   scene.add(mesh);
   return { mesh, mat, maxOpacity };
@@ -2728,6 +3359,8 @@ function makePlane(color) {
   body.rotation.z = Math.PI / 2; g.add(body);
   const wing = new THREE.Mesh(new THREE.BoxGeometry(8, 0.22, 1.7), mat);
   g.add(wing);
+  const cockpit = new THREE.Mesh(new THREE.SphereGeometry(.72, 10, 8), new THREE.MeshLambertMaterial({ color: 0x6aa5c7, transparent: true, opacity: .88 }));
+  cockpit.scale.set(1.2, .65, .8); cockpit.position.set(.7, .48, 0); g.add(cockpit);
   const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.0, 1.3), mat);
   tailFin.position.set(-2.6, 1.0, 0); g.add(tailFin);
   const tailWing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 3.2), mat);
@@ -2758,11 +3391,11 @@ function makeFlockBird(color) {
 const flyers = [];
 // 航线特意压低、收窄,让它们真的会从龙卷风头上飞过去(而不是永远在天边绕圈)
 const PLANE_SETUPS = [
-  { color: 0xf2f2f2, r: 120, y: 52, speed: 0.34, cx: -20, cz: -60 },
-  { color: 0xdfe6ee, r: 150, y: 66, speed: 0.27, cx: 10,  cz: -50 },
-  { color: 0xffe0a8, r: 95,  y: 44, speed: 0.31, cx: -40, cz: -70 },
-  { color: 0xbfe0ff, r: 170, y: 74, speed: 0.24, cx: 0,   cz: -40 },
-  { color: 0xffc2c2, r: 135, y: 58, speed: 0.29, cx: -60, cz: -50 }
+  { color: 0xd93436, r: 120, y: 52, speed: 0.34, cx: -20, cz: -60 },
+  { color: 0xe64936, r: 150, y: 66, speed: 0.27, cx: 10,  cz: -50 },
+  { color: 0xc9242e, r: 95,  y: 44, speed: 0.31, cx: -40, cz: -70 },
+  { color: 0xf05a3d, r: 170, y: 74, speed: 0.24, cx: 0,   cz: -40 },
+  { color: 0xb91f2b, r: 135, y: 58, speed: 0.29, cx: -60, cz: -50 }
 ];
 PLANE_SETUPS.forEach((s, i) => {
   flyers.push({
@@ -3254,6 +3887,7 @@ const TWIST_RISE_DUR = 2.0; // 卷上去要多久
 const TWIST_FLY_DUR  = 1.7; // 甩出去、掉回地面要多久
 function updateTwister(dt, t) {
   liftables.forEach(obj => {
+    if (liftKind.get(obj) === 'person' || enterableHouses.includes(obj)) return;   // 人和避难建筑保持安全稳定
     let st = liftState.get(obj);
     if (!st) {
       const tw = grabbingTornado(obj.position.x, obj.position.y, obj.position.z);
@@ -3357,6 +3991,9 @@ const state = {
   busy: false,
   boltOpacity: 0, nextBolt: 0, firstBolt: true
 };
+function isOutdoorEvacuation() {
+  return state.raining || state.nightTarget || sciState.mode === 'tornado' || sciState.mode === 'quake';
+}
 
 /* ================= 四季系统 ================= */
 const SEASONS = {
@@ -3381,7 +4018,8 @@ function applySeasonEnv(key) {
   sunSprite.material.map = S.tex === 'fire' ? sunTexFire : sunTexNormal;
   sunLight.color.set(S.tex === 'fire' ? 0xffdfae : 0xfff3d6);
   state.snowTarget = S.snow;
-  ground.material.color.set(S.tint);
+  // 水泥广场不随四季染成草坪色；冬季仍由积雪层覆盖。
+  ground.material.color.set({ spring: 0x86ad6b, summer: 0x6f9d57, autumn: 0x8fa461, winter: S.tint }[key]);
   state.rainbowTarget = 1;
   snowP.pts.visible = (key === 'winter');
   leavesFall.visible = (key === 'autumn');
@@ -3406,10 +4044,11 @@ function applySeasonVisual(key) {
     }
   });
   flowers.forEach(fl => {
-    if (key === 'spring') { fl.g.scale.setScalar(0.01); fl.target = 1; }
-    else if (key === 'summer') fl.target = 1;
-    else if (key === 'autumn') fl.target = 0.55;
-    else fl.target = 0;
+    fl.winter = key === 'winter';
+    if (key === 'spring') { fl.g.scale.setScalar(0.01); fl.target = .75; }
+    else if (key === 'summer') fl.target = .72 + Math.random() * .28;
+    else if (key === 'autumn') fl.target = 0.45;
+    else fl.target = .24;
   });
   sprouts.forEach((sp, i) => {
     if (key === 'spring') {
@@ -3503,10 +4142,10 @@ function playSci(key) {
   sciState.mode = key;
   sciState.startT = clock.elapsedTime;
   hideEffects();
-  if (cfg.effect === 'rain')  { rainP.pts.visible = true; sendEveryoneHome(); }
-  if (cfg.effect === 'snow')  { snowP.pts.visible = true; sendEveryoneHome(); }     // 下雪了,大家躲回家
-  if (cfg.effect === 'hail')  { hailP.pts.visible = true; sendEveryoneHome(); }     // 下冰雹了,大家躲回家
-  if (cfg.effect === 'tornado') {   // 龙卷风来了:狂风暴雨+密集闪电+风啸声,全村人四散奔逃
+  if (cfg.effect === 'rain')  { state.raining = true; rainP.pts.visible = true; sendEveryoneHome(); }
+  if (cfg.effect === 'snow')  { state.raining = true; snowP.pts.visible = true; sendEveryoneHome(); }
+  if (cfg.effect === 'hail')  { state.raining = true; hailP.pts.visible = true; sendEveryoneHome(); }
+  if (cfg.effect === 'tornado') {   // 龙卷风来了：人在室内避难，室外保留风雨和物体受风效果
     tornadoes.forEach(tw => tw.visible = true);
     rainP.pts.visible = true;
     setRainIntensity(RAIN_STORM);
@@ -3516,8 +4155,7 @@ function playSci(key) {
     state.riverFlow = 2.4;
     ensureAudio();
     startWindHowl();
-    goHomers.forEach(h => { h.mode = 'out'; h.step = 0; });   // 屋里的也别待着,一起出来跑
-    startPanic();
+    sendEveryoneHome();
   }
   if (cfg.effect === 'quake')   sendEveryoneHome();                               // 地震了,大家躲回家
   leavesFall.visible = false;
@@ -3705,6 +4343,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+  const evacuating = isOutdoorEvacuation();
 
   // 夜晚过渡
   state.nightVal = lerp(state.nightVal, state.nightTarget, dt * 1.4);
@@ -3737,9 +4376,40 @@ function animate() {
   foliage.forEach(f => {
     f.m.scale.lerp(_v3.setScalar(f.targetScale), dt * f.grow * 1.6);
     f.m.material.color.lerp(f.targetColor, dt * 2.0);
+    f.m.rotation.z = f.baseRotZ + Math.sin(t * .9 + f.phase) * f.sway;
   });
   flowers.forEach(fl => {
     fl.g.scale.lerp(_v3.setScalar(fl.base * fl.target), dt * 1.8);
+    const wilt = fl.winter ? new THREE.Color(0x342d29) : null;
+    fl.materials.forEach(item => item.m.color.lerp(wilt || item.color, dt * 2.2));
+  });
+  mountainHikers.forEach(h => {
+    h.rainT = THREE.MathUtils.clamp(h.rainT + (evacuating ? dt * .14 : -dt * .18), 0, 1);
+    h.p.g.visible = h.rainT < .98;
+    const climb = evacuating ? 0 : Math.sin(t * .22 + h.phase) * .06;
+    h.p.g.position.lerpVectors(h.home, h.low, THREE.MathUtils.clamp(h.rainT + climb, 0, 1));
+    h.p.g.rotation.y = Math.atan2(h.low.x - h.home.x, h.low.z - h.home.z) + Math.PI;
+    h.p.armL.rotation.x = h.p.armR.rotation.x = -1.25;
+    h.p.legL.rotation.x = Math.sin(t * 2.4 + h.phase) * .28;
+    h.p.legR.rotation.x = -h.p.legL.rotation.x;
+  });
+  bridgeWalkers.forEach(w => {
+    if (evacuating) {
+      if (w.rainZ === undefined) { w.rainZ = w.p.g.position.z; w.rainDir = w.rainZ >= BRIDGE_Z ? 1 : -1; }
+      w.rainZ += w.rainDir * 4.2 * dt;
+      const z = THREE.MathUtils.clamp(w.rainZ, BRIDGE_Z - BRIDGE_HALF, BRIDGE_Z + BRIDGE_HALF);
+      w.p.g.position.set(BRIDGE_X, bridgeY(z) + .34, z); w.p.g.rotation.y = w.rainDir > 0 ? 0 : Math.PI;
+      if (Math.abs(z - BRIDGE_Z) >= BRIDGE_HALF - .1) w.p.g.visible = false;
+      return;
+    }
+    w.p.g.visible = true; w.rainZ = undefined;
+    const cycle = (t * .075 + w.phase / Math.PI) % 2;
+    const u = cycle <= 1 ? cycle : 2 - cycle;
+    const z = BRIDGE_Z - BRIDGE_HALF + u * BRIDGE_HALF * 2;
+    w.p.g.position.set(BRIDGE_X + (w.phase - 1.3) * .7, bridgeY(z) + .34, z);
+    w.p.g.rotation.y = cycle <= 1 ? 0 : Math.PI;
+    w.p.legL.rotation.x = Math.sin(t * 4 + w.phase) * .45;
+    w.p.legR.rotation.x = -w.p.legL.rotation.x;
   });
   sprouts.forEach(sp => {
     if (sp.visible) sp.scale.lerp(_v3.setScalar(sp.userData.target || 1), dt * 1.2);
@@ -3776,9 +4446,9 @@ function animate() {
   bees.forEach(b => {
     const a = t * b.sp + b.ph;
     b.g.position.set(
-      hiveAnchor.x + Math.cos(a) * b.r,
-      hiveAnchor.y + b.h + Math.sin(a * 1.7) * 1.2,
-      hiveAnchor.z + Math.sin(a) * b.r);
+      b.home.x + Math.cos(a) * b.r,
+      b.h + Math.sin(a * 1.7) * .5,
+      b.home.z + Math.sin(a) * b.r);
     b.g.rotation.y = -a + Math.PI;
     b.wing.rotation.z = Math.sin(t * 40 + b.ph) * 0.6;
   });
@@ -3797,8 +4467,13 @@ function animate() {
   flyers.forEach(fl => updateFlyer(fl, dt, t));
 
   // 小兔子：蹦蹦跳跳乱跑
-  rabbits.forEach(rb => {
+  rabbits.forEach((rb, i) => {
     if (liftState.has(rb.g)) return;   // 正被龙卷风卷着,别再自己蹦
+    if (petsShouldShelter()) {
+      movePetToSlot(rb.g, i, 10, dt);
+      rb.g.position.y = 0;
+      return;
+    }
     const dx = rb.tx - rb.g.position.x, dz = rb.tz - rb.g.position.z;
     const dist = Math.hypot(dx, dz);
     if (dist < 1) {   // 到了就挑新地方
@@ -3819,23 +4494,26 @@ function animate() {
     a.head.rotation.z = -eat * a.eatDepth;
     a.head.position.y = a.headY - eat * a.dip;
     a.tail.rotation.z = Math.sin(t * 2.6 + a.phase) * a.tailSwing;
-    if (a.legs) {   // 小牛踱步:走到哪儿吃到哪儿
+    if (a.walkSpeed) {   // 牛羊都只在各自的小牧场里慢慢活动
       const g = a.g;
       const dx = a.tx - g.position.x, dz = a.tz - g.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.6) {   // 走到头了,换个地方继续吃
-        a.tx = 14 + Math.random() * 22;   // 东边草场 x∈[14,36]
-        a.tz = 16 + Math.random() * 16;   // z∈[16,32],不踩小河不踩泥坑
-        a.legs.forEach(l => l.rotation.x = 0);
+        const [cx, cz, rx, rz] = a.pen;
+        a.tx = cx + (Math.random() * 2 - 1) * rx;
+        a.tz = cz + (Math.random() * 2 - 1) * rz;
+        if (a.legs) a.legs.forEach(l => l.rotation.x = 0);
         g.position.y = 0;
       } else {
         g.position.x += dx / dist * a.walkSpeed * dt;
         g.position.z += dz / dist * a.walkSpeed * dt;
         const targetRot = Math.atan2(dx, dz) - Math.PI/2;   // 牛头朝 +x
         g.rotation.y += wrapAng(targetRot - g.rotation.y) * Math.min(1, dt * 2);
-        const sw = Math.sin(t * 3.2 + a.phase) * 0.28;   // 慢慢踱步,对角腿成对摆
-        a.legs[0].rotation.x = sw;  a.legs[3].rotation.x = sw;
-        a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
+        if (a.legs) {
+          const sw = Math.sin(t * 3.2 + a.phase) * 0.28;   // 慢慢踱步,对角腿成对摆
+          a.legs[0].rotation.x = sw;  a.legs[3].rotation.x = sw;
+          a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
+        }
         g.position.y = Math.abs(Math.sin(t * 3.2 + a.phase)) * 0.05;
       }
     }
@@ -3844,6 +4522,13 @@ function animate() {
   // 小猫玩球：球蹦蹦跳跳，小猫追上去一巴掌把球拍走
   {
     const b = catPlay.ball, c = catPlay.g;
+    if (petsShouldShelter()) {
+      b.visible = false;
+      movePetToSlot(c, 10, 9, dt);
+      c.position.y = 0;
+      catPlay.tail.rotation.z = .6 + Math.sin(t * 2) * .08;
+    } else {
+    b.visible = true;
     const bdx = catPlay.btx - b.position.x, bdz = catPlay.btz - b.position.z;
     const bd = Math.hypot(bdx, bdz);
     if (bd < 0.3) {   // 球跳到点了就挑下一个落点(离猫远一点)
@@ -3870,11 +4555,20 @@ function animate() {
     }
     c.rotation.y = Math.atan2(cdx, cdz) - Math.PI/2;
     catPlay.tail.rotation.z = 0.6 + Math.sin(t * 3.5) * 0.25;
+    }
   }
 
   // 小狗:满草地跑来跑去,跑累了就坐下歇口气,尾巴一直摇
   {
     const d = dogPlay, g = d.g;
+    if (petsShouldShelter()) {
+      d.pause = 0;
+      movePetToSlot(g, 11, 9, dt);
+      g.position.y = 0;
+      d.legs.forEach(l => l.rotation.x = 0);
+      d.tail.rotation.y = Math.sin(t * 3) * .12;
+      d.head.rotation.y = 0;
+    } else {
     if (d.pause > 0) {   // 坐下歇歇,摇尾巴摇得更快,东张西望
       d.pause -= dt;
       d.tail.rotation.y = Math.sin(t * 10) * 0.55;
@@ -3901,6 +4595,8 @@ function animate() {
         d.head.rotation.y = 0;
       }
     }
+    keepDry(g); keepOutFlowerBeds(g);
+    }
   }
 
   // 散步的人：绕圈圈慢慢走（下雨回家时不走圈；刮龙卷风时交给逃命逻辑）
@@ -3912,6 +4608,7 @@ function animate() {
     const px = w.p.g.position.x, pz = w.p.g.position.z;
     w.p.g.rotation.y = Math.atan2(x - px, z - pz);
     w.p.g.position.set(x, 0, z);
+    keepDry(w.p.g); keepOutFlowerBeds(w.p.g);
     const sw = Math.sin(t * 5) * 0.4;
     w.p.legL.rotation.x = sw; w.p.legR.rotation.x = -sw;
     w.p.armL.rotation.x = -sw * 0.7; w.p.armR.rotation.x = sw * 0.7;
@@ -3934,24 +4631,39 @@ function animate() {
     });
   }
 
-  // 娃娃屋里的人走来走去
+  // 娃娃屋里的人白天走动，夜里回现有床上睡。
   {
-    const a = t * 0.5;
-    dollPerson.g.position.x = Math.sin(a) * 2.2;
-    dollPerson.g.position.z = Math.cos(a * 0.7) * 1.5 - 0.5;
-    dollPerson.g.rotation.y = Math.cos(a) > 0 ? 1.2 : -1.2;
-    const sw = Math.sin(t * 4.5) * 0.35;
-    dollPerson.legL.rotation.x = sw; dollPerson.legR.rotation.x = -sw;
+    if (state.nightTarget) {
+      dollPerson.g.position.set(-3.4, 1.08, -1.05);
+      dollPerson.g.rotation.set(-Math.PI / 2, 0, 0);
+      dollPerson.legL.rotation.x = dollPerson.legR.rotation.x = 0;
+    } else {
+      const a = t * 0.5;
+      dollPerson.g.position.x = Math.sin(a) * 2.2;
+      dollPerson.g.position.z = Math.cos(a * 0.7) * 1.5 - 0.5;
+      dollPerson.g.position.y = .3;
+      dollPerson.g.rotation.set(0, Math.cos(a) > 0 ? 1.2 : -1.2, 0);
+      const sw = Math.sin(t * 4.5) * 0.35;
+      dollPerson.legL.rotation.x = sw; dollPerson.legR.rotation.x = -sw;
+    }
   }
-  // 后排新房子里的住户也在屋里走来走去(没有空房子)
+  // 每个上层住户白天在本层走动，夜里睡本层已有沙发。
   housePacers.forEach(({ p, floorY, phase }) => {
+    if (state.nightTarget) {
+      p.g.position.set(1.5, floorY + .72, -2.25);
+      p.g.rotation.set(.32 + Math.sin(t * 1.2 + phase) * .04, Math.PI, 0);
+      p.legL.rotation.x = p.legR.rotation.x = -1.35;
+      p.armL.rotation.x = p.armR.rotation.x = -.65;
+      return;
+    }
     const a = t * 0.5 + phase;
     p.g.position.x = Math.sin(a) * 2.0;
     p.g.position.z = Math.cos(a * 0.7) * 1.4 - 0.5;
-    p.g.position.y = floorY;
-    p.g.rotation.y = Math.cos(a) > 0 ? 1.2 : -1.2;
+    p.g.position.y = floorY + .3;
+    p.g.rotation.set(0, Math.cos(a) > 0 ? 1.2 : -1.2, 0);
     const sw = Math.sin(t * 4.5 + phase) * 0.35;
     p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
+    p.armL.rotation.x = 0; p.armR.rotation.x = 0;
   });
 
   // 秋天的落叶
@@ -4007,7 +4719,16 @@ function animate() {
   }
 
   // 健身器材 & 老爷爷 & 小朋友
-  gymSwings.forEach(s => { s.swing.rotation.x = Math.sin(t * 1.6 + s.phase) * 0.5; });
+  gymSwings.forEach(s => { s.swing.rotation.x = evacuating ? 0 : Math.sin(t * 1.6 + s.phase) * 0.5; });
+  gymUsers.forEach(u => {
+    u.p.g.visible = !evacuating;
+    if (!u.p.g.visible) return;
+    const pos = u.swing.localToWorld(new THREE.Vector3(0, -2.12, 0));
+    u.p.g.position.copy(pos); u.p.g.rotation.y = .5;
+    u.p.armL.rotation.x = u.p.armR.rotation.x = -1.25;
+    u.p.legL.rotation.x = Math.sin(t * 1.6 + u.phase) * .5;
+    u.p.legR.rotation.x = -u.p.legL.rotation.x;
+  });
   twister.userData.disc.rotation.y += dt * 0.6;
   if (goHomers[0].mode === 'out' && !state.panic) {   // 爷爷在屋外才摆手,回屋/逃命就不摆了
     grandpa.armL.rotation.x = -1.2 + Math.sin(t * 0.9) * 0.45;
@@ -4018,27 +4739,223 @@ function animate() {
     kid.g.position.y = Math.abs(Math.sin(t * 4)) * 0.35;
     kid.g.rotation.y = Math.sin(t * 0.8) * 0.6;
   }
-  // 新加的两个小孩:在草地上蹦跳玩耍(回家路上/进屋后交给通用跑动代码;去河边玩的交给河边行程状态机)
+  // 小朋友在安全草坪来回玩；回家路上/进屋后完全交给通用回家状态机。
   playKids.forEach(pk => {
     const { p, phase, h } = pk;
     if (state.panic || !h || h.mode !== 'out') return;
-    if (pk.trip && pk.trip.state !== 'play') return;   // 正在河边坐船/游泳/蹚水
+    const pace = Math.sin(t * .42 + phase);
+    p.g.position.x = pk.playX + pace * 3.2;
+    p.g.position.z = pk.playZ + Math.sin(t * .21 + phase * .7) * 1.1;
     p.g.position.y = Math.abs(Math.sin(t * 4 + phase)) * 0.3;
-    p.g.rotation.y = Math.sin(t * 0.7 + phase) * 0.9;
+    p.g.rotation.y = Math.cos(t * .42 + phase) >= 0 ? Math.PI / 2 : -Math.PI / 2;
   });
   // 老人家站着慢慢摇(回家路上/进屋后交给通用跑动代码)
+  // New park children run by the slide, swing by the play set, and eat at the stalls.
+  cityKids.forEach(({ p, x, z, kind, phase }) => {
+    p.g.visible = !evacuating;
+    if (evacuating) return;
+    if (kind === 'eat') {
+      p.g.position.set(38 + (phase - 5.4) * 14, 0, 49.5);
+      p.g.rotation.y = 0;
+      p.armL.rotation.x = -.45 + Math.sin(t * 2 + phase) * .12;
+    } else if (kind === 'slide') {
+      const cycle = (t * .14 + phase * .11) % 1;
+      if (cycle < .35) {
+        const u = cycle / .35; p.g.position.set(-112, .2 + u * 3.5, 42.4); p.g.rotation.y = Math.PI;
+      } else {
+        const u = (cycle - .35) / .65; p.g.position.set(-112, 3.7 * (1 - u), 42.7 + u * 7); p.g.rotation.y = 0;
+      }
+      p.legL.rotation.x = p.legR.rotation.x = -.7;
+    } else if (kind === 'swing') {
+      const side = phase < 2.3 ? -1 : 1, a = Math.sin(t * 1.6 + phase) * .45;
+      p.g.position.set(-105 + side * 1.2, 1.7 + Math.cos(a) * .15, 42 + Math.sin(a) * 1.8);
+      p.g.rotation.x = a; p.g.rotation.y = Math.PI; p.legL.rotation.x = p.legR.rotation.x = -1.1;
+    } else if (kind === 'seesaw') {
+      const side = phase < 4 ? -1 : 1, a = Math.sin(t * 1.35) * .18;
+      p.g.position.set(-120 + side * 3.4, 1.7 + side * Math.sin(a) * 3.4, 35);
+      p.g.rotation.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, a);
+      p.legL.rotation.x = p.legR.rotation.x = -1.25;
+    }
+  });
+  if (playSeesaw) playSeesaw.rotation.z = Math.sin(t * 1.35) * .18;
+  parkVisitors.forEach((v, vi) => {
+    const g = v.p.g;
+    if (!evacuating) {
+      if (v.indoors || !g.visible) { g.visible = true; g.position.set(v.x, 0, v.z); }
+      v.indoors = false; v.route = null; v.routeStep = 0; v.treeShelter = false; v.umbrella.visible = false;
+      g.position.x = v.x + Math.sin(t * .35 + v.phase) * 2.2;
+      g.position.z = v.z + Math.cos(t * .28 + v.phase) * 1.6;
+      g.rotation.y = Math.atan2(Math.cos(t * .35 + v.phase), -Math.sin(t * .28 + v.phase));
+      keepDry(g, 10); keepOutFlowerBeds(g);
+      return;
+    }
+    if (v.indoors) return;
+    v.umbrella.visible = state.raining;
+    if (!v.route) {
+      const canUseTree = state.raining && sciState.mode !== 'tornado' && sciState.mode !== 'quake' && sciState.mode !== 'hail';
+      let target;
+      if (canUseTree && vi % 4 === 0) {
+        const a = vi * 2.1;
+        target = new THREE.Vector3(188 + Math.cos(a) * 10, 0, 58 + Math.sin(a) * 8.5); v.treeShelter = true;
+      } else if (vi === 2 || vi === 6) {
+        target = v.shelter.clone();
+      } else if (vi % 4 === 1 || vi % 4 === 2) {
+        target = v.shelter.clone();
+      } else if (vi % 4 === 3) {
+        target = new THREE.Vector3(v.x < 0 ? -48 : 48, 0, v.x < 0 ? -55 : -59);
+      } else target = v.shelter.clone();
+      v.route = makeSafeRoute(g.position, target, v.lane); v.routeStep = 0; v.evacT = 0;
+    }
+    v.evacT += dt;
+    if (v.evacT > 25) {
+      const last = v.route[v.route.length - 1];
+      if (v.route.length === 1 || v.routeStep >= v.route.length - 1) {
+        g.position.set(last[0], last[1], last[2]); v.indoors = true; g.visible = true; v.umbrella.visible = !!v.treeShelter; return;
+      }
+    }
+    const [tx, ty, tz] = v.route[v.routeStep];
+    const dx = tx - g.position.x, dy = ty - g.position.y, dz = tz - g.position.z;
+    const dist = Math.hypot(dx, dy, dz), step = 18 * dt;
+    if (dist <= step) {
+      g.position.set(tx, ty, tz); v.routeStep++;
+      if (v.routeStep >= v.route.length) { v.indoors = true; g.visible = true; v.umbrella.visible = !!v.treeShelter; }
+    } else {
+      g.position.x += dx / dist * step; g.position.y += dy / dist * step; g.position.z += dz / dist * step;
+      g.rotation.y = Math.atan2(dx, dz);
+    }
+    const sw = Math.sin(t * 4.5 + v.phase) * .35; v.p.legL.rotation.x = sw; v.p.legR.rotation.x = -sw;
+  });
+  fishers.forEach(f => {
+    if (!evacuating) {
+      if (!f.group.visible) f.group.visible = true;
+      f.group.position.copy(f.home); f.group.rotation.y = 0; f.route = null; f.step = 0; f.umbrella.visible = false;
+      if (f.delivered) { f.caught.forEach(m => m.visible = false); f.catchCount = 0; f.catchT = 2; f.delivered = false; }
+      f.catchT -= dt;
+      if (f.catchT <= 0 && f.catchCount < f.caught.length) {
+        f.caught[f.catchCount++].visible = true; f.catchT = 5.5;
+      }
+      f.person.armR.rotation.x = -1.05 + Math.sin(t * .8) * .08;
+      return;
+    }
+    if (!f.group.visible && f.delivered) return;
+    f.umbrella.visible = state.raining;
+    if (!f.route) { f.route = makeSafeRoute(f.group.position, new THREE.Vector3(-48, 0, -55), f.lane); f.step = 0; f.evacT = 0; }
+    f.evacT += dt;
+    if (f.evacT > 25 && (f.route.length === 1 || f.step >= f.route.length - 1)) {
+      f.group.position.set(-48, 0, -55); f.group.visible = false; f.delivered = true; return;
+    }
+    const [tx, ty, tz] = f.route[f.step], dx = tx - f.group.position.x, dy = ty - f.group.position.y, dz = tz - f.group.position.z;
+    const dist = Math.hypot(dx, dy, dz), step = 18 * dt;
+    if (dist <= step) {
+      f.group.position.set(tx, ty, tz); f.step++;
+      if (f.step >= f.route.length) { f.group.visible = false; f.delivered = true; }
+    } else {
+      f.group.position.x += dx / dist * step; f.group.position.y += dy / dist * step; f.group.position.z += dz / dist * step;
+      f.group.rotation.y = Math.atan2(dx, dz);
+    }
+  });
+  // 住宅日间生活；夜里停火，并使用各层已有沙发休息。
+  homeCooks.forEach(c => {
+    const awake = !state.nightTarget;
+    c.p.g.visible = true; c.spatula.visible = awake;
+    c.steam.forEach(p => p.visible = awake);
+    if (!awake) {
+      c.p.g.position.set(1.5, .72, -2.25);
+      c.p.g.rotation.set(.32 + Math.sin(t * 1.2 + c.phase) * .04, Math.PI, 0);
+      c.p.legL.rotation.x = c.p.legR.rotation.x = -1.35;
+      c.p.armL.rotation.x = c.p.armR.rotation.x = -.65;
+      return;
+    }
+    c.p.g.position.set(2.05, .2, 1.9); c.p.g.rotation.set(0, Math.PI / 2, 0);
+    c.p.legL.rotation.x = 0; c.p.legR.rotation.x = 0;
+    const stir = Math.sin(t * 3.2 + c.phase);
+    c.p.armR.rotation.x = -1.05 + stir * .28; c.p.armL.rotation.x = -.55;
+    c.spatula.rotation.z = -.62 + stir * .16; c.rice.rotation.y += dt * .8;
+    c.steam.forEach((p, i) => { p.position.y = 2.55 + i * .28 + ((t * .45 + i * .38 + c.phase) % .7); p.material.opacity = .25 + .35 * Math.abs(Math.sin(t * 1.8 + i)); });
+  });
+  homeActivityKids.forEach(a => {
+    const awake = !state.nightTarget;
+    a.p.g.visible = awake; a.prop.visible = awake;
+    if (!awake) return;
+    const wave = Math.sin(t * 3 + a.phase);
+    if (a.activity === 'study') { a.p.armL.rotation.x = -1.05; a.p.armR.rotation.x = -1.35 + wave * .13; }
+    else if (a.activity === 'read') { a.p.armL.rotation.x = -.9; a.p.armR.rotation.x = -.9; a.prop.rotation.y = wave * .08; }
+    else if (a.activity === 'play') { a.p.armR.rotation.x = -.45 + wave * .42; a.p.g.position.y = .2 + Math.abs(wave) * .08; }
+    else { a.p.armR.rotation.x = -1.15 + wave * .32; a.p.armL.rotation.x = -.55; }
+  });
+  restaurantCooks.forEach(c => {
+    const awake = !state.nightTarget;
+    c.p.g.visible = awake; c.spatula.visible = awake;
+    c.steam.forEach(p => p.visible = awake);
+    if (!awake) return;
+    const stir = Math.sin(t * 3.8);
+    c.p.armR.rotation.x = -1.2 + stir * .3; c.p.armL.rotation.x = -.65;
+    c.spatula.rotation.z = -.55 + stir * .18; c.rice.rotation.y += dt;
+    c.steam.forEach((p, i) => { p.position.y = 3.55 + i * .28 + ((t * .55 + i * .31) % .8); p.material.opacity = .3 + .35 * Math.abs(Math.sin(t * 2 + i)); });
+  });
+  shopKeepers.forEach(k => {
+    k.p.g.visible = !state.nightTarget;
+    if (!k.p.g.visible) return;
+    k.p.armL.rotation.x = -.35 + Math.sin(t * .8 + k.phase) * .15;
+  });
+  shopCustomers.forEach(c => {
+    c.p.g.visible = !state.nightTarget;
+    if (state.nightTarget) { if (c.mealBowl) c.mealBowl.visible = false; return; }
+    if (c.type === 'restaurant') {
+      const cycle = (t * .1 + c.phase * .05) % 1;
+      if (cycle < .32) {
+        const u = cycle / .32; c.p.g.position.set(-9 + u * 20, .2, -1.5); c.mealBowl.visible = false; c.mealState = 'buying';
+      } else if (cycle < .45) {
+        c.p.g.position.set(11, .2, -1.5); c.mealBowl.visible = true; c.mealState = 'collecting';
+      } else if (cycle < .72) {
+        const u = (cycle - .45) / .27; c.p.g.position.set(11 - u * 18, .2, -1.5); c.mealBowl.visible = true; c.mealState = 'carrying';
+      } else {
+        c.p.g.position.set(-7, .2, -1.5); c.mealBowl.visible = true; c.mealState = 'eating';
+        c.p.armR.rotation.x = -1.2 + Math.sin(t * 4) * .25; c.p.armL.rotation.x = -.7;
+      }
+      c.p.g.rotation.y = cycle < .32 ? Math.PI / 2 : cycle < .72 ? -Math.PI / 2 : 0;
+      return;
+    }
+    const a = t * .22 + c.phase;
+    c.p.g.position.x = -9 + Math.sin(a) * 5.5; c.p.g.position.z = -1.5 + Math.cos(a) * 1.2;
+    c.p.g.rotation.y = Math.cos(a) > 0 ? Math.PI / 2 : -Math.PI / 2;
+    const sw = Math.sin(t * 3.2 + c.phase) * .28; c.p.legL.rotation.x = sw; c.p.legR.rotation.x = -sw;
+    if (c.type === 'clothes') {
+      const col = [0xe95f72,0x5c9bd3,0xe7bb4f,0x75ad72][Math.floor(t / 10) % 4];
+      c.p.body.material.color.setHex(col); c.p.armL.material.color.setHex(col); c.p.armR.material.color.setHex(col);
+    }
+  });
+  indoorPlayKids.forEach((k, i) => {
+    k.p.g.visible = !state.nightTarget;
+    if (!k.p.g.visible) return;
+    const cycle = (t * .16 + k.phase) % 1;
+    if (k.kind === 'slide') k.p.g.position.set(-8 + i * 1.8, .25 + 3.2 * (1 - cycle), -3 + cycle * 6);
+    else { k.p.g.position.set(4 + i * 2.2, .2 + Math.abs(Math.sin(t * 2.2 + k.phase)) * .45, -1); k.p.armL.rotation.z = Math.sin(t * 2 + k.phase) * .5; }
+  });
+  stallNPCs.forEach(s => { s.g.visible = !evacuating; });
   idleAdults.forEach(({ p, phase, h }) => {
     if (state.panic || !h || h.mode !== 'out') return;
+    keepDry(p.g, 10); keepOutFlowerBeds(p.g);
     p.g.rotation.z = Math.sin(t * 0.5 + phase) * 0.03;
     p.armL.rotation.x = -0.4 + Math.sin(t * 0.8 + phase) * 0.3;
     p.armR.rotation.x = -0.4 + Math.sin(t * 0.8 + phase + Math.PI) * 0.3;
   });
 
-  // 回到家的村民:小朋友白天趴书桌写作业(右手写字一动一动);夜里大家到床/板凳边就躺平/坐着睡(每帧重摆,龙卷风复位后能自愈)
+  goHomers.forEach((h, i) => {
+    if (!h.p.umbrella) {
+      const u = new THREE.Group();
+      const canopy = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: [0xe85f68,0x5b9fd0,0xf0bd4b][i % 3] }));
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, 2.1, 6), new THREE.MeshLambertMaterial({ color: 0x4c5154 })); stick.position.y = -1;
+      u.add(canopy, stick); u.position.set(.7, 5.4, 0); h.p.g.add(u); h.p.umbrella = u;
+    }
+    h.p.umbrella.visible = state.raining && h.mode !== 'home' && h.mode !== 'inside';
+  });
+
+  // 回到家的村民:小朋友白天趴书桌写作业；夜里大家到床/现有沙发睡觉。
   goHomers.forEach(h => {
     if (h.mode !== 'home' || state.panic) return;
     if (h.sleeping) {
-      if (h.sleepKind === 'bench') {          // 坐在板凳上打瞌睡(没靠背,困得往前点头)
+      if (h.sleepKind === 'sofa') {           // 坐在现有沙发上打瞌睡
         h.p.g.rotation.set(0.32 + Math.sin(t * 1.2) * 0.06, h.sleepSpot.ry, 0);
         h.p.legL.rotation.x = -1.4; h.p.legR.rotation.x = -1.4;
         h.p.armL.rotation.x = -0.7; h.p.armR.rotation.x = -0.7;   // 手搭在膝盖上
@@ -4059,28 +4976,46 @@ function animate() {
     if (state.panic || liftState.has(h.p.g)) return;   // 逃命中/被卷走的不走回家流程
     if (h.mode !== 'going' && h.mode !== 'inside' && h.mode !== 'back' && h.mode !== 'leaving') return;
     const g = h.p.g;
+    if (h.mode === 'going') {
+      h.evacT = (h.evacT || 0) + dt;
+      // 低帧率设备上也要准时完成避险；仍按安全路线逐点推进，跨河时不会跳过桥面。
+      if (performance.now() - (h.evacStarted || performance.now()) > 28000) {
+        if (h.rainRoute && h.rainRoute.length) {
+          const p = h.rainRoute[Math.min(h.rainRouteStep, h.rainRoute.length - 1)];
+          g.position.set(p[0], p[1], p[2]);
+          if (h.rainRouteStep < h.rainRoute.length - 1) h.rainRouteStep++;
+          else { h.mode = 'inside'; h.step = 0; }
+        } else {
+          g.position.set(h.home[0], 0, h.home[1]); h.mode = 'inside'; h.step = 0;
+        }
+        return;
+      }
+    }
     let tx, ty = 0, tz;
-    if (h.mode === 'going')       { tx = h.home[0]; tz = h.home[1]; }      // 先跑到家门口
+    if (h.mode === 'going')       { [tx, ty, tz] = h.rainRoute ? h.rainRoute[h.rainRouteStep] : [h.home[0], 0, h.home[1]]; }
     else if (h.mode === 'inside') { [tx, ty, tz] = h.path[h.step]; }       // 进屋,沿路径走向落脚点(含爬楼梯)
     else if (h.mode === 'back') {                                          // 出门:沿路径倒走回一楼,再到门口
       if (h.step > 0) [tx, ty, tz] = h.path[h.step - 1];
       else { tx = h.home[0]; tz = h.home[1]; }
     }
-    else                          { tx = h.out.x;     tz = h.out.z; }      // 再从门口走回原位
+    else                          { [tx, ty, tz] = h.leaveRoute ? h.leaveRoute[h.leaveRouteStep] : [h.out.x, 0, h.out.z]; }
     const dx = tx - g.position.x, dy = ty - g.position.y, dz = tz - g.position.z;
-    const dist = Math.hypot(dx, dy, dz), step = 20 * dt;
+    const dist = Math.hypot(dx, dy, dz), step = (evacuating ? 18 : 12) * dt;
     if (dist <= step) {
       g.position.set(tx, ty, tz);
       h.p.legL.rotation.x = h.p.legR.rotation.x = 0;
       h.p.armL.rotation.x = h.p.armR.rotation.x = 0;
-      if (h.mode === 'going') { h.mode = 'inside'; h.step = 0; }  // 到家门口,继续进屋
+      if (h.mode === 'going') {
+        if (h.rainRoute && h.rainRouteStep < h.rainRoute.length - 1) h.rainRouteStep++;
+        else { h.mode = 'inside'; h.step = 0; }
+      }
       else if (h.mode === 'inside') {                             // 走完一个路径点
         if (h.step < h.path.length - 1) h.step++;                 // 还有下一段(继续上楼)
         else {                                                    // 到自己的落脚点:站定,面向屋里
           h.mode = 'home';
           if (h.faceY !== undefined) g.rotation.y = h.faceY;
           if (state.nightTarget && !h.sleeping && h.sleepSpot) {
-            kidGoSleep(h);                 // 夜里到家:不停留,直接去床/板凳(大人小孩一样)
+            kidGoSleep(h);                 // 夜里到家:不停留,直接去床/沙发(大人小孩一样)
           } else if (h.homework && !h.sleeping) {   // 小朋友趴书桌:两只手伸到作业本上
             h.p.armL.rotation.x = -1.15;
             h.p.armR.rotation.x = -1.45;
@@ -4092,19 +5027,23 @@ function animate() {
         else h.mode = 'leaving';                                  // 到门口,继续往外走
       }
       else {
-        h.mode = 'out';
-        if (h.rotY !== undefined) g.rotation.y = h.rotY;   // 恢复原朝向
-        if (h.walker) h.walker.ang = Math.atan2((tz - 18) / h.walker.rz, tx / h.walker.rx);
+        if (h.leaveRoute && h.leaveRouteStep < h.leaveRoute.length - 1) h.leaveRouteStep++;
+        else {
+          h.mode = 'out';
+          if (h.rotY !== undefined) g.rotation.y = h.rotY;
+          if (h.walker) h.walker.ang = Math.atan2((tz - 18) / h.walker.rz, tx / h.walker.rx);
+        }
       }
     } else {
       g.position.x += dx / dist * step;
       g.position.z += dz / dist * step;
       g.rotation.y = Math.atan2(dx, dz);
-      const sw = Math.sin(t * 10) * 0.55;
+      const sw = Math.sin(t * 6) * 0.42;
       h.p.legL.rotation.x = sw; h.p.legR.rotation.x = -sw;
       h.p.armL.rotation.x = -sw * 0.7; h.p.armR.rotation.x = sw * 0.7;
       if (h.mode === 'going' || h.mode === 'leaving') {
-        g.position.y = Math.abs(Math.sin(t * 10)) * 0.22;   // 户外跑步才颠簸(屋内/楼梯上不颠)
+        if (ty > .4 || g.position.y > .4) g.position.y += dy / dist * step;
+        else g.position.y = Math.abs(Math.sin(t * 6)) * 0.12;
       } else {
         g.position.y += dy / dist * step;                   // 爬楼梯:y 平滑升降
       }
@@ -4149,14 +5088,19 @@ function animate() {
       b.caught = true; b.caughtT = 0;
     }
   });
+  riverSubmarine.u = (riverSubmarine.u + riverSubmarine.speed * state.riverFlow * dt) % 1;
+  const subP = riverCurve.getPointAt(riverSubmarine.u);
+  const subTan = riverCurve.getTangentAt(riverSubmarine.u);
+  riverSubmarine.g.position.set(subP.x, .42, subP.z);
+  riverSubmarine.g.rotation.y = Math.atan2(subTan.x, subTan.z);
 
-  // 小朋友去河边玩:坐大船游河 / 下水游泳 / 河里蹚水 / 不坐船就扑通掉河里
+  // 旧河边儿童状态只做清理，不再接管位置。
   updateRiverKids(dt, t);
 
   // 龙卷风(三个一起刮:先动漏斗本体,再判定卷走了谁,最后村民四散奔逃)
   if (tornadoes[0].visible) {
     tornadoes.forEach((tornado, ti) => updateTornadoVisual(tornado, ti, dt, t));
-    updatePanic(dt, t);     // 先跑(逃命的人自己走),再判抓取
+    if (state.panic) updatePanic(dt, t);
     updateTwister(dt, t);   // 卷中谁就接管谁,panic 不会再去抢位置
   }
 
@@ -4241,12 +5185,12 @@ window.__dbg = {
     return { head: v.toArray().map(n => +n.toFixed(2)), foot: h.p.g.position.toArray().map(n => +n.toFixed(2)),
              scale: +h.p.g.scale.x.toFixed(2), ry: +h.sleepSpot.ry.toFixed(2) };
   },
-  bedView: (i) => {   // 镜头凑近 i 号村民的睡铺(床/板凳)看睡觉姿势:床从侧上方拍,板凳从前方拍
+  bedView: (i) => {   // 镜头凑近 i 号村民的睡铺(床/沙发)看睡觉姿势
     const h = goHomers[i];
     if (!h || !h.sleepSpot || !h.houseObj) return 'no sleep spot';
     const house = h.houseObj, lp = h.sleepSpot.local;
     controls.minDistance = 0;
-    if (h.sleepKind === 'bench') {
+    if (h.sleepKind === 'sofa') {
       camera.position.copy(house.localToWorld(new THREE.Vector3(lp[0] + 0.6, lp[1] + 3.8, lp[2] - 1.5)));
       controls.target.copy(house.localToWorld(new THREE.Vector3(lp[0], lp[1] + 0.8, lp[2] + 0.1)));
     } else {
@@ -4266,6 +5210,128 @@ window.__dbg = {
     };
   },
   setView: (x, y, z, tx, ty, tz) => { camera.position.set(x, y, z); controls.target.set(tx, ty, tz); controls.update(); },
+  houseCount: () => enterableHouses.length,
+  residentialHouseCount: () => residentialHouses.length,
+  homeInteriorInfo: () => residentialHouses.map((h, i) => ({
+    index: i, kidVisible: homeActivityKids[i].p.g.visible, activity: homeActivityKids[i].activity,
+    cookVisible: homeCooks[i].p.g.visible, activePot: !state.nightTarget && !!h.userData.hasActiveCook,
+    floors: h.userData.floors
+  })),
+  floorOccupancy: () => residentialHouses.map((h, i) => ({
+    house: i + 1, floors: h.userData.floors,
+    occupiedFloors: [1, ...housePacers.filter(r => r.house === h).map(r => r.floor + 1)]
+  })),
+  treeBuildingClearance: () => TREE_POS.map(([x, z]) => {
+    const buildings = [...residentialHouses, dollhouse];
+    const nearest = Math.min(...buildings.map(h => Math.hypot(x - h.position.x, z - h.position.z)));
+    return { tree: [x, z], nearestBuildingCenter: +nearest.toFixed(2) };
+  }),
+  playKidInfo: () => playKids.map(pk => ({
+    mode: pk.h?.mode || null,
+    riverState: riverKids.find(rk => rk.pk === pk)?.state || null,
+    pos: pk.p.g.position.toArray().map(n => +n.toFixed(2)),
+    riverDistance: +distToRiver(pk.p.g.position.x, pk.p.g.position.z).toFixed(2)
+  })),
+  homeView: (i) => {
+    const h = residentialHouses[i]; if (!h) return 'no house';
+    camAnim = null; insideHouse = false; controls.enabled = true; btnBack.classList.remove('show'); h.updateMatrixWorld(true);
+    camera.position.copy(h.localToWorld(new THREE.Vector3(0, 5.1, 16))); controls.target.copy(h.localToWorld(new THREE.Vector3(0, 2.3, 0))); controls.update(); return 'ok';
+  },
+  shopCount: () => commercialBuildings.length,
+  shopLabels: () => commercialBuildings.map(h => h.userData.label),
+  transportCount: () => transportExhibits.length,
+  transportLabels: () => transportExhibits.map(h => h.userData.label),
+  transportTypes: () => transportExhibits.map(h => h.userData.type),
+  riverTransportInfo: () => ({
+    boats: boats.map(b => ({ pos: b.g.position.toArray().map(n => +n.toFixed(2)), riverDistance: +distToRiver(b.g.position.x, b.g.position.z).toFixed(2) })),
+    submarine: { pos: riverSubmarine.g.position.toArray().map(n => +n.toFixed(2)), riverDistance: +distToRiver(riverSubmarine.g.position.x, riverSubmarine.g.position.z).toFixed(2) }
+  }),
+  tableSupportInfo: () => restaurantTables.map(({ top, leg }) => ({
+    topBottom: +(top.position.y - .1).toFixed(2), legTop: +(leg.position.y + .75).toFixed(2), legBottom: +(leg.position.y - .75).toFixed(2)
+  })),
+  slideInfo: () => ({
+    indoorRotation: indoorPlaySlide ? +indoorPlaySlide.rotation.x.toFixed(2) : null,
+    outdoorRotation: outdoorPlaySlide ? +outdoorPlaySlide.rotation.x.toFixed(2) : null,
+    indoorKids: indoorPlayKids.filter(k => k.kind === 'slide').map(k => k.p.g.position.toArray().map(n => +n.toFixed(2))),
+    outdoorKids: cityKids.filter(k => k.kind === 'slide').map(k => k.p.g.position.toArray().map(n => +n.toFixed(2)))
+  }),
+  petShelterInfo: () => {
+    const pets = [...rabbits.map(r => r.g), catPlay.g, dogPlay.g];
+    return { active: petsShouldShelter(), ballVisible: catPlay.ball.visible,
+      inside: pets.map(g => Math.abs(g.position.x - petShelter.x) <= petShelter.w / 2 && Math.abs(g.position.z - petShelter.z) <= petShelter.d / 2),
+      positions: pets.map(g => g.position.toArray().map(n => +n.toFixed(2))), umbrellas: 0 };
+  },
+  nightInfo: () => ({
+    night: !!state.nightTarget,
+    homersSleeping: goHomers.filter(h => h.sleeping).length,
+    sofaSleepers: goHomers.filter(h => h.sleepKind === 'sofa').length,
+    benchSleepers: goHomers.filter(h => h.sleepKind === 'bench').length,
+    homeSteamVisible: homeCooks.flatMap(c => c.steam).filter(p => p.visible).length,
+    restaurantWorkersVisible: restaurantCooks.filter(c => c.p.g.visible).length,
+    shopPeopleVisible: [...shopKeepers, ...shopCustomers].filter(x => x.p.g.visible).length,
+    cityKidsVisible: cityKids.filter(k => k.p.g.visible).length,
+    bridgeVisible: bridgeWalkers.filter(w => w.p.g.visible).length,
+    hikersVisible: mountainHikers.filter(h => h.p.g.visible).length,
+    upperResidentsSleepingOnSofas: housePacers.filter(r => r.p.g.rotation.x > .2).length
+  }),
+  insideBuilding: () => insideHouse,
+  shopView: (i) => {
+    const h = commercialBuildings[i]; if (!h) return 'no shop';
+    camAnim = null; insideHouse = false; controls.enabled = true; btnBack.classList.remove('show');
+    camera.position.set(h.position.x, 7, h.position.z + 24); controls.target.set(h.position.x, 3.2, h.position.z); controls.update(); return 'ok';
+  },
+  transportView: (i) => {
+    const h = transportExhibits[i]; if (!h) return 'no exhibit';
+    camAnim = null; insideHouse = false; controls.enabled = true; btnBack.classList.remove('show');
+    camera.position.set(h.position.x, 8, h.position.z + 28); controls.target.set(h.position.x, 3, h.position.z); controls.update(); return 'ok';
+  },
+  petView: () => { camera.position.set(petShelter.x, 17, petShelter.z + 30); controls.target.set(petShelter.x, 2.5, petShelter.z); controls.update(); },
+  submarineView: () => { const p = riverSubmarine.g.position; camera.position.set(p.x + 18, 10, p.z + 18); controls.target.set(p.x, .8, p.z); controls.update(); },
+  homeFloorView: (i, floor) => {
+    const h = residentialHouses[i]; if (!h) return 'no house';
+    h.updateMatrixWorld(true); const y = Math.max(0, Math.min(h.userData.floors - 1, floor)) * 7;
+    camera.position.copy(h.localToWorld(new THREE.Vector3(0, y + 4.4, 16)));
+    controls.target.copy(h.localToWorld(new THREE.Vector3(0, y + 2.2, -1))); controls.update(); return 'ok';
+  },
+  fishingView: () => { camera.position.set(20, 14, 48); controls.target.set(20, 1, 4); controls.update(); },
+  restaurantInfo: () => ({
+    cooks: restaurantCooks.length, cookVisible: restaurantCooks.every(c => c.p.g.visible),
+    customerState: shopCustomers.find(c => c.type === 'restaurant')?.mealState || null,
+    bowlVisible: !!shopCustomers.find(c => c.type === 'restaurant')?.mealBowl?.visible
+  }),
+  fisherInfo: () => fishers.map(f => ({ visible: f.group.visible, caught: f.catchCount, delivered: f.delivered, pos: f.group.position.toArray().map(n => +n.toFixed(1)) })),
+  layoutInfo: () => ({
+    trees: TREE_POS.length,
+    minTreeRiverDistance: +Math.min(...TREE_POS.map(([x,z]) => distToRiver(x,z))).toFixed(1),
+    riverWalks: riverWalks.length,
+    lamps: streetLampSites.length,
+    roadZ: trafficCurve.getSpacedPoints(12).map(p => +p.z.toFixed(1)),
+    mountains: mountains.map(m => ({ z: m.position.z, radius: m.geometry.parameters.radius, height: m.geometry.parameters.height }))
+  }),
+  evacuationInfo: () => ({
+    active: isOutdoorEvacuation(), panic: state.panic,
+    homers: goHomers.map(h => h.mode),
+    parkIndoors: parkVisitors.filter(v => v.indoors).length,
+    parkVisible: parkVisitors.filter(v => v.p.g.visible).length,
+    treeShelters: parkVisitors.filter(v => v.indoors && v.treeShelter && v.p.g.visible).length,
+    bridgeVisible: bridgeWalkers.filter(w => w.p.g.visible).length,
+    hikersVisible: mountainHikers.filter(h => h.p.g.visible).length,
+    fishersVisible: fishers.filter(f => f.group.visible).length
+  }),
+  routeAudit: () => goHomers.filter(h => h.rainRoute).map(h => ({
+    from: h.out ? [h.out.x, h.out.z] : null,
+    to: h.home,
+    bridgeDeckPoints: h.rainRoute.filter(p => p[1] > .5 && Math.abs(p[0] - BRIDGE_X) < 3).length,
+    minRiverDistanceOffDeck: Math.min(...h.rainRoute.filter(p => p[1] <= .5).map(p => distToRiver(p[0], p[2])))
+  })),
+  weather: (key) => playSci(key),
+  clearWeather: () => exitSci(),
+  outdoorRiverDistances: () => [...walkers.filter(w => !w.h || w.h.mode === 'out').map(w => w.p.g), ...idleAdults.filter(a => !a.h || a.h.mode === 'out').map(a => a.p.g), ...parkVisitors.filter(v => v.p.g.visible).map(v => v.p.g), dogPlay.g]
+    .map(g => +distToRiver(g.position.x, g.position.z).toFixed(2)),
+  fishDepths: () => koiFish.map(k => +k.fish.position.y.toFixed(2)),
+  bridgePeople: () => bridgeWalkers.map(w => w.p.g.position.toArray().map(n => +n.toFixed(2))),
+  rainNow: () => startRain(),
+  clearNow: () => stopRain(),
   riverKids: () => riverKids.map(r => r.state),   // 河边行程状态机(QA 用)
   trip: (i) => {   // 让 i 号玩耍小朋友立刻出发去河边
     const rk = riverKids[i];
