@@ -60,6 +60,12 @@
     font-size: 12px; color: rgba(255,255,255,.92); background: rgba(50,80,110,.35);
     padding: 5px 14px; border-radius: 999px; letter-spacing: 1px; pointer-events: none;
   }
+  #control-help {
+    position: fixed; left: 16px; bottom: 16px; z-index: 9;
+    font-size: 12px; color: #31536c; background: rgba(255,255,255,.82);
+    border: 1px solid rgba(255,255,255,.9); border-radius: 999px; padding: 7px 12px;
+    box-shadow: 0 4px 14px rgba(60,90,120,.15); pointer-events: none;
+  }
 
   #btn-back {
     position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 11;
@@ -195,6 +201,7 @@
 </div>
 
 <div class="hint">🖱️ 按住拖动转一转 · 滚轮拉近拉远 · 点房子可以进去看看</div>
+<div id="control-help">✨ 点击发光的小朋友，用 WASD / 方向键带他散步</div>
 
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js" } }
@@ -1239,6 +1246,8 @@ const goHomers = [
 const kidHome = goHomers[1];
 walkers[0].h = goHomers[2]; walkers[1].h = goHomers[3];
 function sendEveryoneHome() {
+  sendMountainHikersHome();
+  sendPlayerHome();
   goHomers.forEach((h, hi) => {
     if (h.mode === 'out') h.out = h.p.g.position.clone();
     if (h.out) {
@@ -1253,6 +1262,8 @@ function sendEveryoneHome() {
   });
 }
 function everyoneBackOut() {
+  releaseMountainHikers();
+  releasePlayerHome();
   goHomers.forEach(h => {
     if (h.homework) {   // 小朋友不再出门玩:夜里去睡觉,白天回书桌写作业
       if (state.nightTarget) kidGoSleep(h); else kidGoDesk(h);
@@ -1531,6 +1542,11 @@ const catBall = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 7),
 cat.g.position.set(2, 0, 34); catBall.position.set(6, 0.32, 32.5);
 scene.add(cat.g); scene.add(catBall);
 const catPlay = { g: cat.g, tail: cat.tail, ball: catBall, hx: 2, hz: 34, btx: 6, btz: 32.5 };
+const extraCats = [[-8, 44, 0xffb35a], [18, 42, 0xd89a73]].map(([x, z, color], i) => {
+  const c = makeCat(); c.g.traverse(o => { if (o.isMesh && o.material?.color) o.material.color.setHex(color); });
+  c.g.scale.setScalar(1.35); c.g.position.set(x, 0, z); scene.add(c.g);
+  return { ...c, tx: x, tz: z, speed: 2.2 + i * .4, phase: i * 1.7 };
+});
 // 给小球挑新落点:必须离猫足够远,不然球刚被拍走就又落在猫爪子边,
 // 猫每帧都判定"追到了"→原地不动卡死(之前就是这样卡住的)
 function pickBallTarget(c) {
@@ -1592,9 +1608,14 @@ dog.g.scale.setScalar(1.5);
 dog.g.position.set(10, 0, 37);
 scene.add(dog.g);
 const dogPlay = { ...dog, tx: 10, tz: 37, speed: 4.2, pause: 0 };
+const extraDogs = [[-4, 53, 0xe8b06a], [20, 52, 0xb8794d]].map(([x, z, color], i) => {
+  const d = makeDog(); d.g.traverse(o => { if (o.isMesh && o.material?.color) o.material.color.setHex(color); });
+  d.g.scale.setScalar(1.35); d.g.position.set(x, 0, z); scene.add(d.g);
+  return { ...d, tx: x, tz: z, speed: 2.8 + i * .35, pause: 0, phase: i * 1.4 };
+});
 
 /* ================= 小动物避雨笼 ================= */
-const petShelter = { x: 12, z: 62, w: 22, d: 12, g: new THREE.Group() };
+const petShelter = { x: 12, z: 62, w: 28, d: 18, g: new THREE.Group() };
 {
   const g = petShelter.g;
   const wood = new THREE.MeshLambertMaterial({ color: 0x9a704c });
@@ -2116,7 +2137,7 @@ const cityConcrete = new THREE.MeshLambertMaterial({ color: 0x9ea6a8 });
 const asphalt = new THREE.MeshLambertMaterial({ color: 0x4e565b });
 const curbMat = new THREE.MeshLambertMaterial({ color: 0xd8d5cc });
 // 草坪是地图底色，只在活动区和商业街铺设明确边界的城市广场。
-[[ -108, 42, 54, 34 ], [ 76, 35, 40, 28 ], [ 0, -225, 420, 30 ]].forEach(([x,z,w,d]) => {
+[[ -108, 42, 82, 54 ], [ 76, 35, 40, 28 ], [ 0, -225, 420, 30 ]].forEach(([x,z,w,d]) => {
   const plaza = new THREE.Mesh(new THREE.BoxGeometry(w, .12, d), new THREE.MeshLambertMaterial({ color: 0xb8bdbc }));
   plaza.position.set(x, .07, z); scene.add(plaza);
 });
@@ -2194,30 +2215,106 @@ function makeShopSign(text, color) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true })); sign.scale.set(12, 3, 1); return sign;
 }
-const commercialBuildings = [], shopKeepers = [], shopCustomers = [], indoorPlayKids = [], restaurantCooks = [], restaurantTables = [];
+const commercialBuildings = [], shopKeepers = [], shopCustomers = [], indoorPlayKids = [], restaurantCooks = [], restaurantTables = [], paperPlanes = [], shopStaircases = [], clothesFittingRooms = [], upperFloorPeople = [];
 let indoorPlaySlide = null;
 function addShopItem(g, type, x, y, z, color, scale = 1) {
   let item;
   if (type === 'bottle') item = new THREE.Mesh(new THREE.CylinderGeometry(.14 * scale, .18 * scale, .75 * scale, 8), new THREE.MeshLambertMaterial({ color }));
   else if (type === 'food') { item = new THREE.Mesh(new THREE.SphereGeometry(.28 * scale, 8, 6), new THREE.MeshLambertMaterial({ color })); item.scale.y = .7; }
+  else if (type === 'paperPlane') {
+    item = new THREE.Group();
+    const planeMat = new THREE.MeshLambertMaterial({ color: 0xfff8df, side: THREE.DoubleSide });
+    const shape = new THREE.Shape(); shape.moveTo(-.8, -.35); shape.lineTo(.9, 0); shape.lineTo(-.1, .18); shape.closePath();
+    const wing = new THREE.Mesh(new THREE.ShapeGeometry(shape), planeMat); wing.rotation.x = -Math.PI / 2; item.add(wing);
+    const fold = new THREE.Mesh(new THREE.BoxGeometry(1.55, .045, .045), new THREE.MeshLambertMaterial({ color: 0xe5c77d }));
+    fold.rotation.z = -.12; fold.position.set(-.02, .04, 0); item.add(fold);
+    item.scale.setScalar(scale); paperPlanes.push(item);
+  }
   else item = new THREE.Mesh(new THREE.BoxGeometry(.6 * scale, .65 * scale, .42 * scale), new THREE.MeshLambertMaterial({ color }));
   item.position.set(x, y, z); g.add(item); return item;
 }
+const STORE_W = 48, STORE_D = 20, STORE_FLOORS = 3, STORE_FLOOR_H = 7;
+function addShopStaircases(g) {
+  const stepMat = new THREE.MeshLambertMaterial({ color: 0xb7875f });
+  const railMat = new THREE.MeshLambertMaterial({ color: 0x59666b });
+  for (let floor = 0; floor < STORE_FLOORS - 1; floor++) {
+    const baseY = floor * STORE_FLOOR_H;
+    for (let i = 0; i < 7; i++) {
+      const h = (i + 1) * .98;
+      const step = new THREE.Mesh(new THREE.BoxGeometry(5, h, 1.12), stepMat);
+      step.position.set(-17, baseY + h / 2, 7 - i * 1.12); g.add(step);
+    }
+    [-2.55, 2.55].forEach(dx => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(.12, .12, 8.4), railMat);
+      rail.position.set(-17 + dx, baseY + 4.1, 3.25); rail.rotation.x = -.72; g.add(rail);
+    });
+    shopStaircases.push({ floor, steps: 7, topFloor: floor + 1 });
+  }
+}
+function addUpperFloorTheme(g, cfg, floor, fy) {
+  const addResident = (x, z, color, phase) => {
+    const p = makePerson({ h: .54, shirt: color, pants: 0x46515c, hair: 0x493126 });
+    p.g.position.set(x, fy + .2, z); p.g.rotation.y = Math.PI; g.add(p.g);
+    upperFloorPeople.push({ p, phase });
+  };
+  const foodColors = [0xf2b84b,0xe85e52,0x75ad68,0xffd05a,0x9a75b8,0x78ad55];
+  if (cfg.type === 'restaurant' || cfg.type === 'market') {
+    [-9, 0, 9].forEach((sx, shelfI) => {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(6.8, 1.9, 1.2), new THREE.MeshLambertMaterial({ color: 0x8b6747 }));
+      shelf.position.set(sx, fy + 1.05, -4.6); g.add(shelf);
+      for (let i = 0; i < 9; i++) addShopItem(g, 'food', sx - 2.7 + (i % 5) * 1.35, fy + 2.25 + Math.floor(i / 5) * .65, -3.9, foodColors[(i + shelfI + floor) % foodColors.length], .95);
+    });
+    if (cfg.type === 'restaurant') {
+      [-6, 6].forEach((x, i) => {
+        const bowl = new THREE.Mesh(new THREE.TorusGeometry(.75, .18, 8, 12), new THREE.MeshLambertMaterial({ color: 0xf3d87a }));
+        bowl.rotation.x = Math.PI / 2; bowl.position.set(x, fy + 1.05, 2.2); g.add(bowl);
+        const pasta = new THREE.Mesh(new THREE.TorusGeometry(.43, .08, 6, 12), new THREE.MeshLambertMaterial({ color: 0xf2c35a }));
+        pasta.rotation.x = Math.PI / 2; pasta.position.set(x, fy + 1.15, 2.2); g.add(pasta);
+        addResident(x + (i ? -.8 : .8), 4.2, [0xe87565,0x5b9fd0][i], floor + i);
+      });
+    } else {
+      [-7, 1, 9].forEach((x, i) => addResident(x, 4.1, [0x5b9fd0,0xe87565,0xf0bd4b][i], floor + i));
+    }
+  } else if (cfg.type === 'clothes') {
+    [-10, 0, 10].forEach((sx, rackI) => {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 7.2, 7), new THREE.MeshLambertMaterial({ color: 0x4f5559 }));
+      bar.rotation.z = Math.PI / 2; bar.position.set(sx, fy + 3.4, -3.5); g.add(bar);
+      for (let i = 0; i < 5; i++) {
+        const shirt = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.55, .16), new THREE.MeshLambertMaterial({ color: [0xe95f72,0x5c9bd3,0xe7bb4f,0x75ad72,0x9d7be7][(i + rackI + floor) % 5] }));
+        shirt.position.set(sx - 2.5 + i * 1.25, fy + 2.45, -3.5); g.add(shirt);
+      }
+    });
+    [-8, 0, 8].forEach((x, i) => addResident(x, 3.3, [0xe95f72,0x5c9bd3,0xe7bb4f][i], floor + i));
+  } else if (cfg.type === 'play') {
+    const ballColors = [0xe85d5d,0x59a8dd,0xf2c64d,0x78b96b];
+    for (let i = 0; i < 22; i++) addShopItem(g, 'food', -8 + (i % 8) * 1.7, fy + .5 + Math.floor(i / 8) * .42, -1 + Math.floor(i / 8) * 1.1, ballColors[i % ballColors.length], .8);
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(2.1, .22, 5.8), new THREE.MeshLambertMaterial({ color: 0xf2bd43 }));
+    slide.position.set(8, fy + 2.0, -1); slide.rotation.x = .42; g.add(slide);
+    [-7, -2, 3, 8].forEach((x, i) => addResident(x, 3.8, ballColors[i], floor + i));
+  }
+}
 function addCommercialBuilding(x, z, cfg) {
   const g = new THREE.Group(), wall = new THREE.MeshLambertMaterial({ color: cfg.wall });
-  const back = new THREE.Mesh(new THREE.BoxGeometry(38, 10, .45), wall); back.position.set(0, 5, -6); g.add(back);
-  [-19, 19].forEach(px => { const side = new THREE.Mesh(new THREE.BoxGeometry(.45, 10, 13), wall); side.position.set(px, 5, 0); g.add(side); });
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(38, .3, 13), new THREE.MeshLambertMaterial({ color: 0xd7c4a5 })); floor.position.y = .15; g.add(floor);
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(21, 4.2, 4), new THREE.MeshLambertMaterial({ color: cfg.roof }));
-  roof.position.y = 12.1; roof.rotation.y = Math.PI / 4; roof.scale.z = .42; g.add(roof);
-  const sign = makeShopSign(cfg.label, cfg.accent); sign.position.set(0, 8.3, 1.8); g.add(sign);
+  const wallH = STORE_FLOORS * STORE_FLOOR_H;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(STORE_W, wallH, .45), wall); back.position.set(0, wallH / 2, -9.7); g.add(back);
+  [-STORE_W / 2, STORE_W / 2].forEach(px => { const side = new THREE.Mesh(new THREE.BoxGeometry(.45, wallH, STORE_D), wall); side.position.set(px, wallH / 2, 0); g.add(side); });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(STORE_W, .3, STORE_D), new THREE.MeshLambertMaterial({ color: 0xd7c4a5 })); floor.position.y = .15; g.add(floor);
+  for (let f = 1; f < STORE_FLOORS; f++) {
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(STORE_W, .28, STORE_D - 1.5), new THREE.MeshLambertMaterial({ color: 0xc9b18f }));
+    slab.position.set(0, STORE_FLOOR_H * f, -.6); g.add(slab);
+  }
+  addShopStaircases(g);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(26, 5, 4), new THREE.MeshLambertMaterial({ color: cfg.roof }));
+  roof.position.y = wallH + 2.5; roof.rotation.y = Math.PI / 4; roof.scale.z = .45; g.add(roof);
+  const sign = makeShopSign(cfg.label, cfg.accent); sign.position.set(0, 17.1, 2.4); g.add(sign);
   const shelfMat = new THREE.MeshLambertMaterial({ color: 0x8b6747 });
   if (cfg.type === 'market' || cfg.type === 'cosmetics' || cfg.type === 'toy' || cfg.type === 'shoes') {
     [-11, -4, 3].forEach(sx => {
       const shelf = new THREE.Mesh(new THREE.BoxGeometry(5.5, .22, 2.3), shelfMat); shelf.position.set(sx, 1.2, -3.8); g.add(shelf);
       for (let i = 0; i < 7; i++) {
         const cols = cfg.type === 'market' ? [0xc79b62,0xd9604b,0x70a958,0xf1cf5b] : cfg.type === 'cosmetics' ? [0xe86489,0xf1b8c8,0x9d78c7,0xf3d6a0] : cfg.type === 'shoes' ? [0x6b4f3a,0xe45e62,0x4f77a8,0xe7c052] : [0x4fa9dc,0xf1c64d,0xe7665c,0x75bd75];
-        const item = addShopItem(g, cfg.type === 'cosmetics' ? 'bottle' : cfg.type === 'market' ? 'food' : 'box', sx - 2.1 + i * .7, cfg.type === 'cosmetics' ? 1.75 : 1.65, -3.8, cols[i % cols.length], cfg.type === 'market' ? 1.2 : 1);
+        const itemType = cfg.type === 'toy' && i % 3 === 0 ? 'paperPlane' : cfg.type === 'cosmetics' ? 'bottle' : cfg.type === 'market' ? 'food' : 'box';
+        const item = addShopItem(g, itemType, sx - 2.1 + i * .7, cfg.type === 'cosmetics' ? 1.75 : 1.65, -3.8, cols[i % cols.length], cfg.type === 'market' ? 1.2 : 1);
         if (cfg.type === 'shoes') item.scale.set(1.35, .45, 1.8);
       }
     });
@@ -2226,6 +2323,18 @@ function addCommercialBuilding(x, z, cfg) {
     [-10, 0, 10].forEach((sx, rackI) => {
       const bar = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, 7, 7), new THREE.MeshLambertMaterial({ color: 0x4f5559 })); bar.rotation.z = Math.PI / 2; bar.position.set(sx, 4.8, -2.8); g.add(bar);
       [0xe95f72,0x5c9bd3,0xe7bb4f,0x75ad72].forEach((col, i) => { const shirt = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.8, .18), new THREE.MeshLambertMaterial({ color: col })); shirt.position.set(sx - 2.3 + i * 1.5, 3.7, -2.8); g.add(shirt); });
+    });
+    // 试衣间：地面层两个、二楼和三楼各一个，顾客会轮流进去换装停留。
+    [[0, 13], [0, 19], [1, 13], [2, 13]].forEach(([floor, fx], roomI) => {
+      const fy = floor * STORE_FLOOR_H, fz = 4.8;
+      const curtainMat = new THREE.MeshLambertMaterial({ color: [0xdba6bc, 0xaecfe0, 0xe6bd7c, 0xb9d99e][roomI], transparent: true, opacity: .86 });
+      const back = new THREE.Mesh(new THREE.BoxGeometry(4.8, 3.5, .16), curtainMat); back.position.set(fx, fy + 1.75, fz - 1.8); g.add(back);
+      const left = new THREE.Mesh(new THREE.BoxGeometry(.16, 3.5, 3.6), curtainMat); left.position.set(fx - 2.3, fy + 1.75, fz); g.add(left);
+      const right = new THREE.Mesh(new THREE.BoxGeometry(.16, 3.5, 3.6), curtainMat); right.position.set(fx + 2.3, fy + 1.75, fz); g.add(right);
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(1.25, 2.4, .08), new THREE.MeshLambertMaterial({ color: 0xb9dce5, emissive: 0x6f9aa5, emissiveIntensity: .22 })); mirror.position.set(fx - 3.1, fy + 1.65, fz - 1.2); g.add(mirror);
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, .45, .8), new THREE.MeshLambertMaterial({ color: 0x9b7658 })); bench.position.set(fx, fy + .28, fz + 1.3); g.add(bench);
+      const sign = makeShopSign('试衣间', [0xd45e83, 0x5b9fc0, 0xd69645, 0x70a56a][roomI]); sign.scale.set(3.8, .95, 1); sign.position.set(fx, fy + 3.95, fz - 1.95); g.add(sign);
+      clothesFittingRooms.push({ floor, x: fx, z: fz, y: fy + .2, roomI });
     });
   }
   if (cfg.type === 'restaurant') {
@@ -2261,6 +2370,20 @@ function addCommercialBuilding(x, z, cfg) {
       indoorPlayKids.push({ p: child, phase: i * 1.3, kind: i < 2 ? 'slide' : 'balls' });
     }
   }
+  // 二、三楼统一做成可见的精装活动层：地毯、沙发、展架、挂画和暖色灯。
+  for (let f = 1; f < STORE_FLOORS; f++) {
+    const fy = STORE_FLOOR_H * f;
+    const rug = new THREE.Mesh(new THREE.BoxGeometry(18, .08, 7), new THREE.MeshLambertMaterial({ color: [0xf2c4cf, 0xb8ddea][f - 1] }));
+    rug.position.set(-2, fy + .18, 2.2); g.add(rug);
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(10, 2.2, 1.3), shelfMat); shelf.position.set(-12, fy + 1.35, -6.8); g.add(shelf);
+    for (let i = 0; i < 4; i++) addShopItem(g, cfg.type === 'toy' && i % 2 === 0 ? 'paperPlane' : 'box', -15.5 + i * 2.2, fy + 2.55, -6.5, cfg.accent, .9);
+    const sofaMat = new THREE.MeshLambertMaterial({ color: f === 1 ? 0x6e91a8 : 0xb77b91 });
+    const sofa = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1.0, 1.5), sofaMat); sofa.position.set(6, fy + .72, 1.5); g.add(sofa);
+    const backrest = new THREE.Mesh(new THREE.BoxGeometry(5.5, .8, .2), sofaMat); backrest.position.set(6, fy + 1.45, .85); g.add(backrest);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(.38, 10, 8), new THREE.MeshLambertMaterial({ color: 0xffe1a3, emissive: 0xffbf58, emissiveIntensity: .4 })); lamp.position.set(12, fy + 4.6, -4.5); g.add(lamp);
+    const painting = new THREE.Mesh(new THREE.BoxGeometry(3.8, 2.0, .1), new THREE.MeshLambertMaterial({ color: f === 1 ? 0x79b7cf : 0xe7a06e })); painting.position.set(4, fy + 4.5, -9.38); g.add(painting);
+    addUpperFloorTheme(g, cfg, f, fy);
+  }
   const counter = new THREE.Mesh(new THREE.BoxGeometry(7, 2.1, 1.5), new THREE.MeshLambertMaterial({ color: cfg.accent })); counter.position.set(14, 1.05, -3.8); g.add(counter);
   const seller = makePerson({ h: .66, shirt: cfg.accent, pants: 0x46515c, hair: 0x4a3027 }); seller.g.position.set(14, .25, -5); seller.g.rotation.y = Math.PI; g.add(seller.g);
   shopKeepers.push({ p: seller, phase: commercialBuildings.length * .8 });
@@ -2271,8 +2394,8 @@ function addCommercialBuilding(x, z, cfg) {
     mealBowl = new THREE.Mesh(new THREE.CylinderGeometry(.34, .25, .2, 10), new THREE.MeshLambertMaterial({ color: 0xf4d77a }));
     mealBowl.position.set(.58, 2.05, -.35); mealBowl.visible = false; customer.g.add(mealBowl);
   }
-  shopCustomers.push({ p: customer, phase: commercialBuildings.length * 1.1, type: cfg.type, changed: false, mealBowl, mealState: 'buying' });
-  g.position.set(x, 0, z); g.scale.setScalar(1.06); g.userData.label = cfg.label; g.userData.type = cfg.type; scene.add(g); commercialBuildings.push(g); return g;
+  shopCustomers.push({ p: customer, phase: commercialBuildings.length * 1.1, type: cfg.type, changed: false, mealBowl, mealState: 'buying', wardrobeState: 'browsing', fittingRoom: null });
+  g.position.set(x, 0, z); g.scale.setScalar(1.06); g.userData.label = cfg.label; g.userData.type = cfg.type; g.userData.floors = STORE_FLOORS; scene.add(g); commercialBuildings.push(g); return g;
 }
 [
   [-180, 'play', '室内游乐场', 0xe8dfd0, 0xd85d57, 0xeaa84a],
@@ -2323,8 +2446,6 @@ function addTransportExhibit(x, z, label, type, color) {
   guide.g.position.set(10, .2, -4.5); guide.g.rotation.y = Math.PI; g.add(guide.g);
   g.position.set(x, 0, z); g.userData.label = label; g.userData.type = type; scene.add(g); transportExhibits.push(g); return g;
 }
-addTransportExhibit(-235, 72, '红色飞机体验舱', 'plane', 0xd94e45);
-enterableHouses.push(...transportExhibits);
 
 const stallNPCs = [];
 function addFoodStall(x, z, color, kind) {
@@ -2339,22 +2460,29 @@ function addFoodStall(x, z, color, kind) {
 }
 addFoodStall(38, 56, 0xe85f55, 'food'); addFoodStall(51, 56, 0xf0a942, 'food');
 addFoodStall(64, 56, 0x55a7c7, 'drink'); addFoodStall(77, 56, 0x7e69bd, 'toy'); addFoodStall(90, 56, 0x62a86d, 'food');
-let playSeesaw = null, outdoorPlaySlide = null;
+let playgroundGroup = null, playSeesaw = null, outdoorPlaySlide = null;
+const playSwingRigs = [];
 function addPlayground() {
   const g = new THREE.Group();
+  playgroundGroup = g;
   const red = new THREE.MeshLambertMaterial({ color: 0xef6d5d }), blue = new THREE.MeshLambertMaterial({ color: 0x4b9bd3 }), yellow = new THREE.MeshLambertMaterial({ color: 0xf2c84b });
   const tower = new THREE.Mesh(new THREE.BoxGeometry(3.2, .3, 3.2), blue); tower.position.set(0, 3.8, 0); g.add(tower);
   [-1.3, 1.3].forEach(px => [-1.3, 1.3].forEach(pz => { const leg = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, 3.8, 6), blue); leg.position.set(px, 1.9, pz); g.add(leg); }));
   const slide = new THREE.Mesh(new THREE.BoxGeometry(2.2, .22, 7.5), yellow); slide.position.set(0, 2, 4); slide.rotation.x = .43; g.add(slide); outdoorPlaySlide = slide;
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 6.5, 8), red); bar.rotation.z = Math.PI / 2; bar.position.set(7, 4, 0); g.add(bar);
   [4.3, 9.7].forEach(px => { const post = new THREE.Mesh(new THREE.CylinderGeometry(.13, .13, 4, 6), red); post.position.set(px, 2, 0); g.add(post); });
-  [-1.2, 1.2].forEach(dx => { const rope = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 2.2, 5), red); rope.position.set(7 + dx, 2.9, 0); g.add(rope); const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, .14, .55), blue); seat.position.set(7 + dx, 1.75, 0); g.add(seat); });
+  [-1.2, 1.2].forEach(dx => {
+    const rig = new THREE.Group(); rig.position.set(7 + dx, 4, 0); g.add(rig);
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 2.2, 5), red); rope.position.y = -1.1; rig.add(rope);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.1, .14, .55), blue); seat.position.y = -2.2; rig.add(seat);
+    playSwingRigs.push(rig);
+  });
   playSeesaw = new THREE.Group();
   const pivot = new THREE.Mesh(new THREE.ConeGeometry(.65, 1.4, 8), red); pivot.position.y = .7; playSeesaw.add(pivot);
   const beam = new THREE.Mesh(new THREE.BoxGeometry(8, .28, .65), yellow); beam.position.y = 1.45; playSeesaw.add(beam);
   [-3.4, 3.4].forEach(px => { const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, .18, 1), blue); seat.position.set(px, 1.7, 0); playSeesaw.add(seat); });
   playSeesaw.position.set(-8, 0, -7); g.add(playSeesaw);
-  g.position.set(-112, 0, 42); scene.add(g);
+  g.position.set(-112, 0, 42); g.scale.setScalar(1.8); g.userData.scale = 1.8; scene.add(g);
 }
 addPlayground();
 const cityKids = [];
@@ -2371,6 +2499,7 @@ function addCityKid(x, z, shirt, kind, phase) {
   .forEach(([color, kind], i) => addCityKid(kind === 'eat' ? 65 + i * 4 : -116 + i * 3, kind === 'eat' ? 31 : 38 + (i % 3) * 4, color, kind, i * .9));
 // 后山有人沿着山径慢慢爬，远景不再只是静止的模型。
 const mountainHikers = [];
+const hikerShelterHouses = [house14, house15, house16, house17, house10, house11, house12, house13, house8, house9];
 const climbRoutes = [
   [-210,-385,70,92,.55],[-210,-385,70,92,1.15],[-210,-385,70,92,1.95],
   [125,-395,78,105,.45],[125,-395,78,105,1.05],[125,-395,78,105,1.7],
@@ -2381,11 +2510,38 @@ climbRoutes.forEach(([cx,cz,r,h,a], i) => {
   const d = r * (.4 + (i % 3) * .09), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, y = h * (1 - d / r) - 1;
   const p = makePerson({ h: .72, shirt: [0x4f88b8,0xe0725f,0xf0ba42,0x6ea46a,0x9a6db1][i % 5], pants: 0x3f4650, hair: 0x4a3027 });
   p.g.position.set(x, y, z); p.g.scale.setScalar(1.05); p.armL.rotation.x = p.armR.rotation.x = -1.25; scene.add(p.g);
-  const lowD = r * .78, low = new THREE.Vector3(cx + Math.cos(a) * lowD, h * (1 - lowD / r), cz + Math.sin(a) * lowD);
+  // 绳索延长到草坪边，恶劣天气时只作为设施保留，不再让孩子沿绳索下撤。
+  const lowD = r * 1.01, low = new THREE.Vector3(cx + Math.cos(a) * lowD, .16, cz + Math.sin(a) * lowD);
   const highD = r * .28, high = new THREE.Vector3(cx + Math.cos(a) * highD, h * (1 - highD / r), cz + Math.sin(a) * highD);
   const rope = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(low, high), 18, .09, 6), ropeMat); scene.add(rope);
-  mountainHikers.push({ p, home: new THREE.Vector3(x,y,z), low, phase: i * 1.1, rainT: 0 });
+  const shelterHouse = hikerShelterHouses[i % hikerShelterHouses.length];
+  shelterHouse.updateMatrixWorld(true);
+  const shelterLocal = new THREE.Vector3(-3.2 + (i % 3) * 3.1, .42, -.7 + (i % 2) * 1.8);
+  const shelter = shelterHouse.localToWorld(shelterLocal);
+  mountainHikers.push({ p, home: new THREE.Vector3(x,y,z), low, shelter, shelterHouse,
+    phase: i * 1.1, rainT: 0, evacuating: false, sheltered: false, evacT: 0, evacFrom: null });
 });
+function sendMountainHikersHome() {
+  mountainHikers.forEach(h => {
+    if (h.evacuating) return;
+    h.evacuating = true;
+    h.sheltered = false;
+    h.evacT = 0;
+    h.evacFrom = h.p.g.position.clone();
+    h.p.g.visible = true;
+  });
+}
+function releaseMountainHikers() {
+  mountainHikers.forEach(h => {
+    h.evacuating = false;
+    h.sheltered = false;
+    h.evacT = 0;
+    h.evacFrom = null;
+    h.rainT = 0;
+    h.p.g.position.copy(h.home);
+    h.p.g.visible = true;
+  });
+}
 // 孩子从桥面过河；桥下仍留给船通行。
 const bridgeWalkers = [];
 [[0x5daee2, 0], [0xf0a55e, Math.PI], [0x9d7be7, 1.3]].forEach(([shirt, phase]) => {
@@ -2578,6 +2734,36 @@ idleAdults[8].h = goHomers[32]; idleAdults[9].h = goHomers[34];
     goHomers[i].faceY = house.rotation.y + Math.PI;
     goHomers[i].houseObj = house;
   });
+}
+
+/* ---- 可操控的小朋友：点击发光角色后，用 WASD / 方向键在安全草坪散步 ---- */
+const controlHelp = document.getElementById('control-help');
+const playerPerson = makePerson({ h: .82, shirt: 0x7c65d9, pants: 0x3d4b78, hair: 0x2f2344 });
+playerPerson.g.position.set(-28, 0, 52);
+const playerRing = new THREE.Mesh(new THREE.RingGeometry(1.05, 1.28, 24), new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: .95, side: THREE.DoubleSide }));
+playerRing.rotation.x = -Math.PI / 2; playerRing.position.y = .04; playerPerson.g.add(playerRing);
+playerPerson.g.userData.controlPlayer = true;
+scene.add(playerPerson.g);
+const playerHouse = house16;
+playerHouse.updateMatrixWorld(true);
+const player = {
+  p: playerPerson, selected: false, speed: 14, keys: new Set(),
+  outdoorPos: playerPerson.g.position.clone(), shelter: playerHouse.localToWorld(new THREE.Vector3(0, .42, -.7)),
+  evacuating: false, evacFrom: null, evacT: 0
+};
+function setPlayerSelected(selected) {
+  player.selected = selected;
+  playerRing.visible = selected;
+  controlHelp.textContent = selected ? '✨ 已选中：用 WASD / 方向键移动，天气恶劣时会自动回屋' : '✨ 点击发光的小朋友，用 WASD / 方向键带他散步';
+}
+function sendPlayerHome() {
+  if (player.evacuating) return;
+  player.evacuating = true; player.evacT = 0;
+  player.evacFrom = player.p.g.position.clone(); player.outdoorPos.copy(player.p.g.position);
+}
+function releasePlayerHome() {
+  player.evacuating = false; player.evacT = 0; player.evacFrom = null;
+  player.p.g.position.copy(player.outdoorPos); player.p.g.position.y = 0;
 }
 
 /* ---- 小朋友的书桌:有小朋友的楼层靠墙摆一张,回家就趴桌上写作业 ---- */
@@ -2973,15 +3159,15 @@ function addCloud(cx, cy, cz, scale, speed) {
   scene.add(group);
   clouds.push({ group, speed: speed !== undefined ? speed : 0.9 + Math.random()*0.9 });
 }
-addCloud(-120, 62, -160, 1.3); addCloud(-40, 74, -190, 1.7); addCloud(50, 66, -150, 1.1);
-addCloud(120, 80, -200, 1.5);  addCloud(10, 58, -110, 0.9);  addCloud(-180, 70, -120, 1.2);
-addCloud(180, 64, -140, 1.0);
+addCloud(-120, 96, -160, 1.3); addCloud(-40, 108, -190, 1.7); addCloud(50, 100, -150, 1.1);
+addCloud(120, 116, -200, 1.5);  addCloud(10, 92, -110, 0.9);  addCloud(-180, 104, -120, 1.2);
+addCloud(180, 98, -140, 1.0);
 // 再多来几朵：高低远近错开，天空更热闹
-addCloud(-230, 76, -180, 1.1); addCloud(-80, 84, -220, 1.9); addCloud(90, 72, -90, 0.8);
-addCloud(240, 78, -170, 1.4);  addCloud(-150, 58, -80, 0.7); addCloud(160, 88, -230, 2.0);
-addCloud(-20, 68, -60, 0.6);
+addCloud(-230, 110, -180, 1.1); addCloud(-80, 120, -220, 1.9); addCloud(90, 106, -90, 0.8);
+addCloud(240, 112, -170, 1.4);  addCloud(-150, 92, -80, 0.7); addCloud(160, 124, -230, 2.0);
+addCloud(-20, 102, -60, 0.6);
 // 彩虹脚下的云：定住不飘（速度 0），让彩虹像从云里长出来；彩虹不出来时这些云就散开,别挡房子
-addCloud(-82, 14, -156, 1.25, 0); addCloud(82, 13, -156, 1.35, 0); addCloud(0, 7, -168, 1.6, 0);
+addCloud(-82, 48, -156, 1.25, 0); addCloud(82, 46, -156, 1.35, 0); addCloud(0, 40, -168, 1.6, 0);
 const bowFootClouds = clouds.slice(-3);
 
 /* ================= 彩虹 ================= */
@@ -4271,6 +4457,12 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let camAnim = null, insideHouse = false;
 let downPos = null;
+addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  if (!player.selected || !['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) return;
+  e.preventDefault(); player.keys.add(key);
+});
+addEventListener('keyup', e => player.keys.delete(e.key.toLowerCase()));
 renderer.domElement.addEventListener('pointerdown', e => { downPos = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('pointerup', e => {
   if (!downPos) return;
@@ -4279,17 +4471,20 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (moved > 6 || insideHouse) return;
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
+  const playerHit = raycaster.intersectObjects([playerPerson.g], true);
+  if (playerHit.length) { setPlayerSelected(true); say('选中啦！用 WASD 或方向键带小朋友散步吧～', 2600); return; }
   const hits = raycaster.intersectObjects(enterableHouses, true);
   if (hits.length) {
     let h = hits[0].object;
     while (h && !enterableHouses.includes(h)) h = h.parent;
-    if (h) enterHouse(h);
-  }
+     if (h) enterHouse(h);
+  } else setPlayerSelected(false);
 });
 function enterHouse(house) {
   house.updateMatrixWorld(true);
-  const viewPos = house.localToWorld(new THREE.Vector3(0, 5.5, 17));
-  const lookAt = house.localToWorld(new THREE.Vector3(0, 3.2, -1));
+  const isShop = commercialBuildings.includes(house);
+  const viewPos = house.localToWorld(new THREE.Vector3(0, isShop ? 14.5 : 5.5, isShop ? 25 : 17));
+  const lookAt = house.localToWorld(new THREE.Vector3(0, isShop ? 8.2 : 3.2, -1));
   camAnim = { p0: camera.position.clone(), t0: controls.target.clone(),
               p1: viewPos, t1: lookAt, k: 0 };
   insideHouse = true;
@@ -4384,15 +4579,45 @@ function animate() {
     fl.materials.forEach(item => item.m.color.lerp(wilt || item.color, dt * 2.2));
   });
   mountainHikers.forEach(h => {
-    h.rainT = THREE.MathUtils.clamp(h.rainT + (evacuating ? dt * .14 : -dt * .18), 0, 1);
-    h.p.g.visible = h.rainT < .98;
-    const climb = evacuating ? 0 : Math.sin(t * .22 + h.phase) * .06;
-    h.p.g.position.lerpVectors(h.home, h.low, THREE.MathUtils.clamp(h.rainT + climb, 0, 1));
+    if (h.evacuating) {
+      h.evacT = Math.min(1, h.evacT + dt * .85);
+      const k = h.evacT * h.evacT * (3 - 2 * h.evacT);
+      h.p.g.position.lerpVectors(h.evacFrom, h.shelter, k);
+      h.p.g.visible = true;
+      if (h.evacT >= 1) h.sheltered = true;
+    } else {
+      h.rainT = THREE.MathUtils.clamp(h.rainT - dt * .18, 0, 1);
+      h.p.g.visible = true;
+      const climb = Math.sin(t * .22 + h.phase) * .06;
+      h.p.g.position.lerpVectors(h.home, h.low, THREE.MathUtils.clamp(h.rainT + climb, 0, 1));
+    }
     h.p.g.rotation.y = Math.atan2(h.low.x - h.home.x, h.low.z - h.home.z) + Math.PI;
     h.p.armL.rotation.x = h.p.armR.rotation.x = -1.25;
     h.p.legL.rotation.x = Math.sin(t * 2.4 + h.phase) * .28;
     h.p.legR.rotation.x = -h.p.legL.rotation.x;
   });
+  playerRing.scale.setScalar(1 + Math.sin(t * 4) * .08);
+  if (player.evacuating) {
+    player.evacT = Math.min(1, player.evacT + dt * .9);
+    const k = player.evacT * player.evacT * (3 - 2 * player.evacT);
+    player.p.g.position.lerpVectors(player.evacFrom, player.shelter, k);
+    player.p.g.visible = true;
+  } else if (player.selected) {
+    const dx = (player.keys.has('d') || player.keys.has('arrowright') ? 1 : 0) - (player.keys.has('a') || player.keys.has('arrowleft') ? 1 : 0);
+    const dz = (player.keys.has('s') || player.keys.has('arrowdown') ? 1 : 0) - (player.keys.has('w') || player.keys.has('arrowup') ? 1 : 0);
+    const len = Math.hypot(dx, dz);
+    if (len) {
+      player.p.g.position.x = THREE.MathUtils.clamp(player.p.g.position.x + dx / len * player.speed * dt, -250, 250);
+      player.p.g.position.z = THREE.MathUtils.clamp(player.p.g.position.z + dz / len * player.speed * dt, -175, 90);
+      player.p.g.rotation.y = Math.atan2(dx, dz);
+      const sw = Math.sin(t * 9) * .42;
+      player.p.legL.rotation.x = sw; player.p.legR.rotation.x = -sw;
+      player.p.armL.rotation.x = -sw * .7; player.p.armR.rotation.x = sw * .7;
+      player.outdoorPos.copy(player.p.g.position);
+    }
+    keepDry(player.p.g, 8); keepOutFlowerBeds(player.p.g);
+    player.p.g.position.y = 0;
+  }
   bridgeWalkers.forEach(w => {
     if (evacuating) {
       if (w.rainZ === undefined) { w.rainZ = w.p.g.position.z; w.rainDir = w.rainZ >= BRIDGE_Z ? 1 : -1; }
@@ -4558,6 +4783,23 @@ function animate() {
     }
   }
 
+  extraCats.forEach((c, i) => {
+    if (petsShouldShelter()) {
+      movePetToSlot(c.g, 12 + i, 8, dt); c.g.position.y = 0; c.tail.rotation.z = .6;
+      return;
+    }
+    const dx = c.tx - c.g.position.x, dz = c.tz - c.g.position.z, dist = Math.hypot(dx, dz);
+    if (dist < .7) {
+      c.tx = -18 + Math.random() * 42; c.tz = 28 + Math.random() * 26;
+    } else {
+      c.g.position.x += dx / dist * c.speed * dt; c.g.position.z += dz / dist * c.speed * dt;
+      c.g.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+      c.g.position.y = Math.abs(Math.sin(t * 7 + c.phase)) * .18;
+    }
+    c.tail.rotation.z = .6 + Math.sin(t * 3 + c.phase) * .2;
+    keepDry(c.g); keepOutFlowerBeds(c.g);
+  });
+
   // 小狗:满草地跑来跑去,跑累了就坐下歇口气,尾巴一直摇
   {
     const d = dogPlay, g = d.g;
@@ -4598,6 +4840,31 @@ function animate() {
     keepDry(g); keepOutFlowerBeds(g);
     }
   }
+
+  extraDogs.forEach((d, i) => {
+    const g = d.g;
+    if (petsShouldShelter()) {
+      d.pause = 0; movePetToSlot(g, 14 + i, 8, dt); g.position.y = 0;
+      d.legs.forEach(l => l.rotation.x = 0); d.tail.rotation.y = Math.sin(t * 3 + i) * .12;
+      return;
+    }
+    if (d.pause > 0) {
+      d.pause -= dt; d.tail.rotation.y = Math.sin(t * 9) * .45; d.legs.forEach(l => l.rotation.x = 0); g.position.y = 0;
+      return;
+    }
+    const dx = d.tx - g.position.x, dz = d.tz - g.position.z, dist = Math.hypot(dx, dz);
+    if (dist < .7) {
+      d.tx = -18 + Math.random() * 42; d.tz = 30 + Math.random() * 24;
+      if (Math.random() < .28) d.pause = 1 + Math.random() * 1.8;
+    } else {
+      g.position.x += dx / dist * d.speed * dt; g.position.z += dz / dist * d.speed * dt;
+      g.rotation.y += wrapAng(Math.atan2(dx, dz) - Math.PI / 2 - g.rotation.y) * Math.min(1, dt * 5);
+      const sw = Math.sin(t * 10 + d.phase) * .45;
+      d.legs[0].rotation.x = sw; d.legs[3].rotation.x = sw; d.legs[1].rotation.x = -sw; d.legs[2].rotation.x = -sw;
+      g.position.y = Math.abs(Math.sin(t * 10 + d.phase)) * .07; d.tail.rotation.y = Math.sin(t * 6 + d.phase) * .36;
+    }
+    keepDry(g); keepOutFlowerBeds(g);
+  });
 
   // 散步的人：绕圈圈慢慢走（下雨回家时不走圈；刮龙卷风时交给逃命逻辑）
   walkers.forEach(w => {
@@ -4750,8 +5017,12 @@ function animate() {
     p.g.rotation.y = Math.cos(t * .42 + phase) >= 0 ? Math.PI / 2 : -Math.PI / 2;
   });
   // 老人家站着慢慢摇(回家路上/进屋后交给通用跑动代码)
-  // New park children run by the slide, swing by the play set, and eat at the stalls.
-  cityKids.forEach(({ p, x, z, kind, phase }) => {
+  // 器材先转动；小朋友的位置随后从器材局部坐标换算，始终贴着座椅或滑道。
+  const seesawAngle = Math.sin(t * 1.35) * .18;
+  if (playSeesaw) playSeesaw.rotation.z = seesawAngle;
+  playSwingRigs.forEach((rig, i) => { rig.rotation.x = Math.sin(t * 1.6 + i * 1.8) * .45; });
+  if (playgroundGroup) playgroundGroup.updateWorldMatrix(true, false);
+  cityKids.forEach(({ p, kind, phase }) => {
     p.g.visible = !evacuating;
     if (evacuating) return;
     if (kind === 'eat') {
@@ -4759,25 +5030,25 @@ function animate() {
       p.g.rotation.y = 0;
       p.armL.rotation.x = -.45 + Math.sin(t * 2 + phase) * .12;
     } else if (kind === 'slide') {
-      const cycle = (t * .14 + phase * .11) % 1;
-      if (cycle < .35) {
-        const u = cycle / .35; p.g.position.set(-112, .2 + u * 3.5, 42.4); p.g.rotation.y = Math.PI;
-      } else {
-        const u = (cycle - .35) / .65; p.g.position.set(-112, 3.7 * (1 - u), 42.7 + u * 7); p.g.rotation.y = 0;
-      }
+      const u = (t * .14 + phase * .11) % 1;
+      p.g.position.copy(playgroundGroup.localToWorld(new THREE.Vector3(0, 2.25, .7 + u * 6.6)));
+      p.g.rotation.set(-.43, 0, 0);
       p.legL.rotation.x = p.legR.rotation.x = -.7;
     } else if (kind === 'swing') {
-      const side = phase < 2.3 ? -1 : 1, a = Math.sin(t * 1.6 + phase) * .45;
-      p.g.position.set(-105 + side * 1.2, 1.7 + Math.cos(a) * .15, 42 + Math.sin(a) * 1.8);
-      p.g.rotation.x = a; p.g.rotation.y = Math.PI; p.legL.rotation.x = p.legR.rotation.x = -1.1;
+      const rig = playSwingRigs[phase < 2.3 ? 0 : 1];
+      p.g.position.copy(rig.localToWorld(new THREE.Vector3(0, -2.16, 0)));
+      p.g.rotation.set(rig.rotation.x, Math.PI, 0); p.legL.rotation.x = p.legR.rotation.x = -1.1;
     } else if (kind === 'seesaw') {
-      const side = phase < 4 ? -1 : 1, a = Math.sin(t * 1.35) * .18;
-      p.g.position.set(-120 + side * 3.4, 1.7 + side * Math.sin(a) * 3.4, 35);
-      p.g.rotation.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, a);
+      const side = phase < 4 ? -1 : 1;
+      p.g.position.copy(playSeesaw.localToWorld(new THREE.Vector3(side * 3.4, 1.88, 0)));
+      p.g.rotation.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, seesawAngle);
       p.legL.rotation.x = p.legR.rotation.x = -1.25;
     }
   });
-  if (playSeesaw) playSeesaw.rotation.z = Math.sin(t * 1.35) * .18;
+  upperFloorPeople.forEach(({ p, phase }) => {
+    p.armL.rotation.x = -.45 + Math.sin(t * 1.3 + phase) * .12;
+    p.armR.rotation.x = -.45 - Math.sin(t * 1.3 + phase) * .12;
+  });
   parkVisitors.forEach((v, vi) => {
     const g = v.p.g;
     if (!evacuating) {
@@ -4914,6 +5185,33 @@ function animate() {
         c.p.armR.rotation.x = -1.2 + Math.sin(t * 4) * .25; c.p.armL.rotation.x = -.7;
       }
       c.p.g.rotation.y = cycle < .32 ? Math.PI / 2 : cycle < .72 ? -Math.PI / 2 : 0;
+      return;
+    }
+    if (c.type === 'clothes') {
+      const cycle = (t * .1 + c.phase) % 1;
+      const room = clothesFittingRooms[Math.floor(t / 24) % clothesFittingRooms.length];
+      c.fittingRoom = room.roomI;
+      if (cycle < .28) {
+        const u = cycle / .28;
+        c.p.g.position.set(-10 + u * 9, .2, -1.5);
+        c.p.g.rotation.y = Math.PI / 2;
+        c.wardrobeState = 'browsing'; c.changed = false;
+        const sw = Math.sin(t * 3.2 + c.phase) * .22; c.p.legL.rotation.x = sw; c.p.legR.rotation.x = -sw;
+      } else if (cycle < .43) {
+        const u = (cycle - .28) / .15;
+        c.p.g.position.set(-1 + u * (room.x + 1), .2, -1.5 + u * (room.z + 1.5));
+        c.p.g.rotation.y = Math.atan2(room.x + 1, room.z + 1.5);
+        c.wardrobeState = 'to-fitting-room'; c.p.legL.rotation.x = .2; c.p.legR.rotation.x = -.2;
+      } else {
+        c.p.g.position.set(room.x, room.y, room.z);
+        c.p.g.rotation.y = Math.PI;
+        c.p.legL.rotation.x = 0; c.p.legR.rotation.x = 0;
+        c.p.armL.rotation.x = -.45 + Math.sin(t * 2.2) * .08; c.p.armR.rotation.x = -.45 - Math.sin(t * 2.2) * .08;
+        c.wardrobeState = cycle < .82 ? 'changing' : 'trying-on'; c.changed = cycle >= .62;
+      }
+      const col = [0xe95f72, 0x5c9bd3, 0xe7bb4f, 0x75ad72][Math.floor(t / 10) % 4];
+      c.p.body.material.color.setHex(c.changed ? col : 0x8d68ad);
+      c.p.armL.material.color.setHex(c.p.body.material.color.getHex()); c.p.armR.material.color.setHex(c.p.body.material.color.getHex());
       return;
     }
     const a = t * .22 + c.phase;
@@ -5239,6 +5537,13 @@ window.__dbg = {
   },
   shopCount: () => commercialBuildings.length,
   shopLabels: () => commercialBuildings.map(h => h.userData.label),
+  shopFloors: () => commercialBuildings.map(h => h.userData.floors),
+  shopStaircaseInfo: () => ({ totalFlights: shopStaircases.length, floorsPerShop: STORE_FLOORS - 1, stepsPerFlight: 7 }),
+  clothesFittingInfo: () => ({ rooms: clothesFittingRooms.length, customer: shopCustomers.find(c => c.type === 'clothes') ? {
+    state: shopCustomers.find(c => c.type === 'clothes').wardrobeState,
+    fittingRoom: shopCustomers.find(c => c.type === 'clothes').fittingRoom,
+    changed: shopCustomers.find(c => c.type === 'clothes').changed
+  } : null }),
   transportCount: () => transportExhibits.length,
   transportLabels: () => transportExhibits.map(h => h.userData.label),
   transportTypes: () => transportExhibits.map(h => h.userData.type),
@@ -5256,11 +5561,13 @@ window.__dbg = {
     outdoorKids: cityKids.filter(k => k.kind === 'slide').map(k => k.p.g.position.toArray().map(n => +n.toFixed(2)))
   }),
   petShelterInfo: () => {
-    const pets = [...rabbits.map(r => r.g), catPlay.g, dogPlay.g];
+    const pets = [...rabbits.map(r => r.g), catPlay.g, dogPlay.g, ...extraCats.map(c => c.g), ...extraDogs.map(d => d.g)];
     return { active: petsShouldShelter(), ballVisible: catPlay.ball.visible,
       inside: pets.map(g => Math.abs(g.position.x - petShelter.x) <= petShelter.w / 2 && Math.abs(g.position.z - petShelter.z) <= petShelter.d / 2),
       positions: pets.map(g => g.position.toArray().map(n => +n.toFixed(2))), umbrellas: 0 };
   },
+  petCount: () => ({ rabbits: rabbits.length, cats: 1 + extraCats.length, dogs: 1 + extraDogs.length }),
+  paperPlaneCount: () => paperPlanes.length,
   nightInfo: () => ({
     night: !!state.nightTarget,
     homersSleeping: goHomers.filter(h => h.sleeping).length,
@@ -5278,7 +5585,7 @@ window.__dbg = {
   shopView: (i) => {
     const h = commercialBuildings[i]; if (!h) return 'no shop';
     camAnim = null; insideHouse = false; controls.enabled = true; btnBack.classList.remove('show');
-    camera.position.set(h.position.x, 7, h.position.z + 24); controls.target.set(h.position.x, 3.2, h.position.z); controls.update(); return 'ok';
+    camera.position.set(h.position.x, 14.5, h.position.z + 25); controls.target.set(h.position.x, 8.2, h.position.z); controls.update(); return 'ok';
   },
   transportView: (i) => {
     const h = transportExhibits[i]; if (!h) return 'no exhibit';
@@ -5318,6 +5625,10 @@ window.__dbg = {
     hikersVisible: mountainHikers.filter(h => h.p.g.visible).length,
     fishersVisible: fishers.filter(f => f.group.visible).length
   }),
+  mountainHikerInfo: () => mountainHikers.map(h => ({ visible: h.p.g.visible, evacuating: h.evacuating, sheltered: h.sheltered, y: +h.p.g.position.y.toFixed(2) })),
+  playerInfo: () => ({ selected: player.selected, evacuating: player.evacuating, pos: player.p.g.position.toArray().map(n => +n.toFixed(2)) }),
+  playerView: () => { camera.position.set(-28, 8, 82); controls.target.set(-28, 2.2, 52); controls.update(); return 'ok'; },
+  cloudHeights: () => clouds.map(c => +c.group.position.y.toFixed(1)),
   routeAudit: () => goHomers.filter(h => h.rainRoute).map(h => ({
     from: h.out ? [h.out.x, h.out.z] : null,
     to: h.home,
